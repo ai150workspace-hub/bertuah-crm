@@ -12,10 +12,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
+  SelectGroup,
+  SelectLabel,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -25,14 +28,13 @@ import { MessageCircle, Phone, Save } from "lucide-react";
 import { toast } from "sonner";
 import type { Contact } from "@/types";
 import {
-  CALL_STATUS_TREE,
-  getLevel2Options,
-  getLevel3Options,
-  getLevel4Options,
-  getUnprospectDetails,
-  type Level1,
-} from "@/lib/call-status-tree";
-import { cn } from "@/lib/utils";
+  HASIL_PANGGILAN,
+  SUB_ALASAN_TIDAK_LAYAK,
+  GRUP_URUT,
+  type KodeHasil,
+  type KodeSubAlasan,
+} from "@/lib/call-outcome/catalog";
+import { infoHasil, validasiHasil, efekSamping } from "@/lib/call-outcome/derive";
 
 export function CustomerDrawer({
   contact,
@@ -43,39 +45,60 @@ export function CustomerDrawer({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [level1, setLevel1] = useState<Level1 | "">("");
-  const [level2, setLevel2] = useState("");
-  const [level3, setLevel3] = useState("");
-  const [level4, setLevel4] = useState("");
-  const [unprospectDetail, setUnprospectDetail] = useState("");
+  const [kode, setKode] = useState<KodeHasil | "">("");
+  const [subAlasan, setSubAlasan] = useState<KodeSubAlasan | "">("");
+  const [tanggalFollowup, setTanggalFollowup] = useState("");
+  const [simulasiNominal, setSimulasiNominal] = useState("");
+  const [simulasiTenor, setSimulasiTenor] = useState("");
   const [notes, setNotes] = useState("");
 
   if (!contact) return null;
 
-  const level2Options = level1 ? getLevel2Options(level1) : [];
-  const level3Options = level1 && level2 ? getLevel3Options(level1, level2) : [];
-  const level4Options =
-    level1 && level2 && level3 ? getLevel4Options(level1, level2, level3) : [];
-  const needsUnprospectDetail = level4 === "Unprospect";
-  const needsFollowUpDate = level4 === "Callback" || level4 === "Meeting";
+  const selected = kode ? infoHasil(kode) : null;
+  const wajib = (selected?.wajib ?? []) as readonly string[];
 
   function resetForm() {
-    setLevel1("");
-    setLevel2("");
-    setLevel3("");
-    setLevel4("");
-    setUnprospectDetail("");
+    setKode("");
+    setSubAlasan("");
+    setTanggalFollowup("");
+    setSimulasiNominal("");
+    setSimulasiTenor("");
     setNotes("");
   }
 
   function handleSave() {
-    if (!level1 || !level2) {
-      toast.error("Lengkapi minimal Level 1 dan Level 2 sebelum menyimpan.");
+    if (!kode) {
+      toast.error("Pilih dulu hasil panggilannya.");
       return;
     }
-    toast.success(`Call log untuk ${contact!.nama} tersimpan (mode demo).`, {
-      description: "Belum tersambung ke database — data ini tidak persisten.",
+
+    const validasi = validasiHasil({
+      kode,
+      subAlasan: subAlasan || null,
+      tanggalFollowup: tanggalFollowup || null,
+      simulasiNominal: simulasiNominal ? Number(simulasiNominal) : null,
+      simulasiTenor: simulasiTenor ? Number(simulasiTenor) : null,
     });
+
+    if (!validasi.valid) {
+      toast.error(validasi.error[0], {
+        description: validasi.error.slice(1).join(" ") || undefined,
+      });
+      return;
+    }
+
+    const efek = efekSamping({
+      kode,
+      subAlasan: subAlasan || null,
+      tanggalFollowup: tanggalFollowup || null,
+    });
+
+    toast.success(
+      `Call log untuk ${contact!.nama} tersimpan (mode demo).`,
+      {
+        description: `Status kontak -> ${efek.statusKontak}. Belum tersambung ke database — data ini tidak persisten.`,
+      }
+    );
     resetForm();
     onOpenChange(false);
   }
@@ -120,116 +143,55 @@ export function CustomerDrawer({
 
           <section className="space-y-3">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Form Call Status
+              Hasil Panggilan
             </h4>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">Level 1</Label>
-                <Select
-                  value={level1}
-                  onValueChange={(v) => {
-                    setLevel1(v as Level1);
-                    setLevel2("");
-                    setLevel3("");
-                    setLevel4("");
-                  }}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Pilih" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.keys(CALL_STATUS_TREE).map((k) => (
-                      <SelectItem key={k} value={k}>
-                        {CALL_STATUS_TREE[k as Level1].label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs">Level 2</Label>
-                <Select
-                  value={level2}
-                  onValueChange={(v) => {
-                    setLevel2(v ?? "");
-                    setLevel3("");
-                    setLevel4("");
-                  }}
-                  disabled={!level1}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Pilih" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {level2Options.map((opt) => (
-                      <SelectItem key={opt} value={opt}>
-                        {opt}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className={cn("space-y-1.5", !level3Options.length && "opacity-40")}>
-                <Label className="text-xs">Level 3</Label>
-                <Select
-                  value={level3}
-                  onValueChange={(v) => {
-                    setLevel3(v ?? "");
-                    setLevel4("");
-                  }}
-                  disabled={!level3Options.length}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Pilih" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {level3Options.map((opt) => (
-                      <SelectItem key={opt} value={opt}>
-                        {opt}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className={cn("space-y-1.5", !level4Options.length && "opacity-40")}>
-                <Label className="text-xs">Level 4</Label>
-                <Select
-                  value={level4}
-                  onValueChange={(v) => setLevel4(v ?? "")}
-                  disabled={!level4Options.length}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Pilih" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {level4Options.map((opt) => (
-                      <SelectItem key={opt} value={opt}>
-                        {opt}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Hasil</Label>
+              <Select value={kode} onValueChange={(v) => setKode((v as KodeHasil) ?? "")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Pilih hasil panggilan">
+                    {(v: string | null) => (v ? infoHasil(v as KodeHasil).label : "Pilih hasil panggilan")}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {GRUP_URUT.map((grup) => (
+                    <SelectGroup key={grup}>
+                      <SelectLabel>{grup}</SelectLabel>
+                      {HASIL_PANGGILAN.filter((h) => h.grup === grup).map((h) => (
+                        <SelectItem key={h.kode} value={h.kode}>
+                          {h.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selected && (
+                <p className="text-xs text-muted-foreground">{selected.aksi}</p>
+              )}
             </div>
 
-            {needsUnprospectDetail && (
+            {wajib.includes("sub_alasan") && (
               <div className="space-y-1.5">
-                <Label className="text-xs">Detail Unprospect</Label>
+                <Label className="text-xs">Alasan Tidak Lolos</Label>
                 <Select
-                  value={unprospectDetail}
-                  onValueChange={(v) => setUnprospectDetail(v ?? "")}
+                  value={subAlasan}
+                  onValueChange={(v) => setSubAlasan((v as KodeSubAlasan) ?? "")}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Pilih alasan" />
+                    <SelectValue placeholder="Pilih alasan">
+                      {(v: string | null) =>
+                        v
+                          ? SUB_ALASAN_TIDAK_LAYAK.find((s) => s.kode === v)?.label
+                          : "Pilih alasan"
+                      }
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {getUnprospectDetails().map((opt) => (
-                      <SelectItem key={opt} value={opt}>
-                        {opt}
+                    {SUB_ALASAN_TIDAK_LAYAK.map((s) => (
+                      <SelectItem key={s.kode} value={s.kode}>
+                        {s.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -237,17 +199,44 @@ export function CustomerDrawer({
               </div>
             )}
 
-            {needsFollowUpDate && (
+            {wajib.includes("tanggal_followup") && (
               <div className="space-y-1.5">
                 <Label className="text-xs">Tanggal Follow-up</Label>
                 <input
                   type="date"
+                  value={tanggalFollowup}
+                  onChange={(e) => setTanggalFollowup(e.target.value)}
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                 />
               </div>
             )}
 
-            {(level4 === "Interest" || level4 === "Prospect") && (
+            {wajib.includes("simulasi") && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Nominal Simulasi (Rp)</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="50000000"
+                    value={simulasiNominal}
+                    onChange={(e) => setSimulasiNominal(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Tenor (bulan)</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="24"
+                    value={simulasiTenor}
+                    onChange={(e) => setSimulasiTenor(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {kode === "MINAT" && (
               <div className="rounded-md border border-hot/30 bg-hot/5 px-3 py-2 text-xs text-hot">
                 Hot lead — kirim simulasi via WhatsApp segera setelah menyimpan.
               </div>

@@ -15,6 +15,8 @@ export type StatusCall =
   | "In Progress"
   | "Contacted"
   | "Hot Lead"
+  | "Warm"
+  | "Closed"
   | "Submitted"
   | "Rejected"
   | "Invalid"

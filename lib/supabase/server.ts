@@ -1,0 +1,32 @@
+// Server-side Supabase client (Server Components, Server Actions, Route Handlers).
+// Respects RLS — runs as the signed-in user. For work that must bypass RLS
+// (e.g. lib/telephony/deps.ts, which must NOT be reachable by mitra), use
+// lib/supabase/service.ts instead.
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+
+export async function createClient() {
+  const cookieStore = await cookies();
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {
+            // Called from a Server Component render — safe to ignore when
+            // middleware/proxy is refreshing the session on the request path.
+          }
+        },
+      },
+    }
+  );
+}

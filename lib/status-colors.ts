@@ -5,6 +5,8 @@ export const STATUS_CALL_COLORS: Record<StatusCall, string> = {
   "In Progress": "bg-warning/15 text-warning-foreground border-warning/30",
   Contacted: "bg-primary/10 text-primary border-primary/20",
   "Hot Lead": "bg-hot/15 text-hot border-hot/30 font-semibold",
+  Warm: "bg-warning/15 text-warning-foreground border-warning/30",
+  Closed: "bg-muted text-muted-foreground",
   Submitted: "bg-accent text-accent-foreground",
   Rejected: "bg-destructive/10 text-destructive border-destructive/20",
   Invalid: "bg-muted text-muted-foreground line-through",
