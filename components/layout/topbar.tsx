@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { AGENT_NAV, ADMIN_NAV } from "./nav-items";
+import { signOut } from "@/app/actions/auth";
 import type { AppUser } from "@/types";
 
 export function TopBar({
@@ -103,17 +104,11 @@ export function TopBar({
             {initials}
           </AvatarFallback>
         </Avatar>
-        <Button
-          variant="ghost"
-          size="icon"
-          title="Keluar"
-          nativeButton={false}
-          render={
-            <Link href="/login">
-              <LogOut className="h-4 w-4" />
-            </Link>
-          }
-        />
+        <form action={signOut}>
+          <Button variant="ghost" size="icon" title="Keluar" type="submit">
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </form>
       </div>
     </header>
   );
