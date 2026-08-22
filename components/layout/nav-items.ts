@@ -56,7 +56,6 @@ export const ADMIN_NAV: NavItem[] = [
     label: "Import Data",
     href: "/admin/import",
     icon: UploadCloud,
-    comingSoon: true,
   },
   { label: "Insentif", href: "/admin/incentives", icon: Wallet, comingSoon: true },
   {
