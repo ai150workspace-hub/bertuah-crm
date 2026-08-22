@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Sheet,
   SheetContent,
@@ -34,23 +35,30 @@ import {
   type KodeHasil,
   type KodeSubAlasan,
 } from "@/lib/call-outcome/catalog";
-import { infoHasil, validasiHasil, efekSamping } from "@/lib/call-outcome/derive";
+import { infoHasil, validasiHasil } from "@/lib/call-outcome/derive";
+import { saveCallLog } from "@/app/actions/call-log";
+import { telUri, normalisasiNomor } from "@/lib/telephony/phone";
+import type { ProviderCapabilities } from "@/lib/telephony/types";
 
 export function CustomerDrawer({
   contact,
   open,
   onOpenChange,
+  capabilities,
 }: {
   contact: Contact | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  capabilities: ProviderCapabilities;
 }) {
+  const router = useRouter();
   const [kode, setKode] = useState<KodeHasil | "">("");
   const [subAlasan, setSubAlasan] = useState<KodeSubAlasan | "">("");
   const [tanggalFollowup, setTanggalFollowup] = useState("");
   const [simulasiNominal, setSimulasiNominal] = useState("");
   const [simulasiTenor, setSimulasiTenor] = useState("");
   const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
 
   if (!contact) return null;
 
@@ -66,12 +74,15 @@ export function CustomerDrawer({
     setNotes("");
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!kode) {
       toast.error("Pilih dulu hasil panggilannya.");
       return;
     }
 
+    // Validasi klien dulu supaya pesan error cepat muncul — server tetap
+    // memvalidasi ulang (lihat app/actions/call-log.ts), ini bukan
+    // pengganti validasi server.
     const validasi = validasiHasil({
       kode,
       subAlasan: subAlasan || null,
@@ -87,26 +98,41 @@ export function CustomerDrawer({
       return;
     }
 
-    const efek = efekSamping({
+    setSaving(true);
+    const result = await saveCallLog({
+      contactId: contact!.id,
       kode,
       subAlasan: subAlasan || null,
       tanggalFollowup: tanggalFollowup || null,
+      simulasiNominal: simulasiNominal ? Number(simulasiNominal) : null,
+      simulasiTenor: simulasiTenor ? Number(simulasiTenor) : null,
+      notes: notes || null,
     });
+    setSaving(false);
 
-    toast.success(
-      `Call log untuk ${contact!.nama} tersimpan (mode demo).`,
-      {
-        description: `Status kontak -> ${efek.statusKontak}. Belum tersambung ke database — data ini tidak persisten.`,
-      }
-    );
+    if (!result.success) {
+      toast.error("Gagal menyimpan call log.", { description: result.error });
+      return;
+    }
+
+    toast.success(`Call log untuk ${contact!.nama} tersimpan.`, {
+      description: `Status kontak -> ${result.statusKontak}.`,
+    });
     resetForm();
     onOpenChange(false);
+    router.refresh();
   }
 
+  const phoneE164 = normalisasiNomor(contact.noHp);
   const waMessage = encodeURIComponent(
     `Assalamu'alaikum Bapak/Ibu ${contact.nama} 🙏\n\nSaya dari *Bertuah CRM* — solusi dana tunai jaminan BPKB kendaraan di Pekanbaru.\n\nBoleh saya bantu hitungkan simulasi untuk ${contact.jenisKendaraan.toLowerCase()} ${contact.merkTipe} (${contact.tahun}) milik Bapak/Ibu?\n\nTerima kasih 🙏`
   );
-  const waHref = `https://wa.me/62${contact.noHp.replace(/\D/g, "").replace(/^0/, "")}?text=${waMessage}`;
+  const waHref = phoneE164
+    ? `https://wa.me/${phoneE164}?text=${waMessage}`
+    : undefined;
+  // capabilities.clickToCall true (PBX) would originate the call from the
+  // CRM instead of opening tel: — belum aktif, lihat docs/TELEPHONY.md.
+  const dialHref = phoneE164 ? telUri(phoneE164) : undefined;
 
   return (
     <Sheet
@@ -119,8 +145,18 @@ export function CustomerDrawer({
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{contact.nama}</SheetTitle>
-          <SheetDescription className="flex items-center gap-1.5">
-            <Phone className="h-3.5 w-3.5" /> {contact.noHp}
+          <SheetDescription className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5">
+              <Phone className="h-3.5 w-3.5" /> {contact.noHp}
+            </span>
+            {dialHref && (
+              <a
+                href={dialHref}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                Telepon
+              </a>
+            )}
           </SheetDescription>
         </SheetHeader>
 
@@ -251,6 +287,13 @@ export function CustomerDrawer({
                 rows={3}
               />
             </div>
+
+            {!capabilities.autoRecording && (
+              <p className="text-xs text-muted-foreground">
+                Rekaman menyusul dari unggahan harian — pastikan HP kamu merekam
+                panggilan ini.
+              </p>
+            )}
           </section>
         </div>
 
@@ -265,8 +308,8 @@ export function CustomerDrawer({
               </a>
             }
           />
-          <Button className="flex-1" onClick={handleSave}>
-            <Save className="h-4 w-4" /> Simpan
+          <Button className="flex-1" onClick={handleSave} disabled={saving}>
+            <Save className="h-4 w-4" /> {saving ? "Menyimpan..." : "Simpan"}
           </Button>
         </SheetFooter>
       </SheetContent>

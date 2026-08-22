@@ -9,9 +9,11 @@ import {
 } from "lucide-react";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { LeadQueueTable } from "@/components/agent/lead-queue-table";
-import { AGENT_KPI, MOCK_CONTACTS } from "@/lib/mock-data";
+import { AGENT_KPI } from "@/lib/mock-data";
 import { formatCompactRupiah, formatPercent } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { CONTACT_SELECT, mapDbContact, type ContactRow } from "@/lib/contacts";
+import { getCapabilities } from "@/lib/telephony/provider";
 
 export default async function AgentDashboardPage() {
   const supabase = await createClient();
@@ -22,6 +24,18 @@ export default async function AgentDashboardPage() {
     ? await supabase.from("users").select("name").eq("id", user.id).maybeSingle()
     : { data: null };
   const firstName = profile?.name ? profile.name.split(" ")[0] : "";
+
+  const { data: contactRows } = user
+    ? await supabase
+        .from("contacts")
+        .select(CONTACT_SELECT)
+        .eq("assigned_to", user.id)
+        .order("created_at", { ascending: true })
+    : { data: null };
+
+  const contacts = ((contactRows ?? []) as ContactRow[]).map(mapDbContact);
+  const hotLeads = contacts.filter((c) => c.statusCall === "Hot Lead").length;
+  const capabilities = await getCapabilities();
 
   return (
     <div className="space-y-6">
@@ -35,7 +49,7 @@ export default async function AgentDashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label="My Leads" value={String(AGENT_KPI.myLeads)} icon={Users} />
+        <KpiCard label="My Leads" value={String(contacts.length)} icon={Users} />
         <KpiCard
           label="Today Calls"
           value={String(AGENT_KPI.todayCalls)}
@@ -46,12 +60,7 @@ export default async function AgentDashboardPage() {
           value={formatPercent(AGENT_KPI.contactRate)}
           icon={TrendingUp}
         />
-        <KpiCard
-          label="Hot Leads"
-          value={String(AGENT_KPI.hotLeads)}
-          icon={Flame}
-          tone="hot"
-        />
+        <KpiCard label="Hot Leads" value={String(hotLeads)} icon={Flame} tone="hot" />
         <KpiCard
           label="Ready to Survey"
           value={String(AGENT_KPI.readyToSurvey)}
@@ -71,7 +80,7 @@ export default async function AgentDashboardPage() {
         />
       </div>
 
-      <LeadQueueTable contacts={MOCK_CONTACTS} />
+      <LeadQueueTable contacts={contacts} capabilities={capabilities} />
     </div>
   );
 }

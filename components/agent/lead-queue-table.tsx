@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { Phone, Plus, Search } from "lucide-react";
@@ -18,9 +19,18 @@ import {
 import { toast } from "sonner";
 import type { Contact } from "@/types";
 import { STATUS_CALL_COLORS } from "@/lib/status-colors";
+import { claimLeads } from "@/app/actions/leads";
 import { CustomerDrawer } from "./customer-drawer";
+import type { ProviderCapabilities } from "@/lib/telephony/types";
 
-export function LeadQueueTable({ contacts }: { contacts: Contact[] }) {
+export function LeadQueueTable({
+  contacts,
+  capabilities,
+}: {
+  contacts: Contact[];
+  capabilities: ProviderCapabilities;
+}) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Contact | null>(null);
   const [open, setOpen] = useState(false);
@@ -30,14 +40,21 @@ export function LeadQueueTable({ contacts }: { contacts: Contact[] }) {
     `${c.nama} ${c.noHp}`.toLowerCase().includes(search.toLowerCase())
   );
 
-  function handleClaim() {
+  async function handleClaim() {
     setClaiming(true);
-    setTimeout(() => {
-      setClaiming(false);
-      toast.success("15 lead baru diambil (mode demo).", {
-        description: "Belum tersambung ke database — antrean di bawah masih data contoh.",
-      });
-    }, 700);
+    const result = await claimLeads();
+    setClaiming(false);
+
+    if (!result.success) {
+      toast.error("Gagal mengambil data baru.", { description: result.error });
+      return;
+    }
+    if (!result.claimed) {
+      toast.info("Tidak ada lead baru yang tersedia di pool saat ini.");
+      return;
+    }
+    toast.success(`${result.claimed} lead baru diambil.`);
+    router.refresh();
   }
 
   return (
@@ -132,7 +149,12 @@ export function LeadQueueTable({ contacts }: { contacts: Contact[] }) {
         </Table>
       </div>
 
-      <CustomerDrawer contact={selected} open={open} onOpenChange={setOpen} />
+      <CustomerDrawer
+        contact={selected}
+        open={open}
+        onOpenChange={setOpen}
+        capabilities={capabilities}
+      />
     </div>
   );
 }
