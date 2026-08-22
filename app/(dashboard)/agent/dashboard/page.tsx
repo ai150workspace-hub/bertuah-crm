@@ -11,13 +11,23 @@ import { KpiCard } from "@/components/dashboard/kpi-card";
 import { LeadQueueTable } from "@/components/agent/lead-queue-table";
 import { AGENT_KPI, MOCK_CONTACTS } from "@/lib/mock-data";
 import { formatCompactRupiah, formatPercent } from "@/lib/format";
+import { createClient } from "@/lib/supabase/server";
 
-export default function AgentDashboardPage() {
+export default async function AgentDashboardPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: profile } = user
+    ? await supabase.from("users").select("name").eq("id", user.id).maybeSingle()
+    : { data: null };
+  const firstName = profile?.name ? profile.name.split(" ")[0] : "";
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">
-          Selamat bekerja, Rina 👋
+          Selamat bekerja{firstName ? `, ${firstName}` : ""} 👋
         </h1>
         <p className="text-sm text-muted-foreground">
           Ringkasan aktivitas kamu hari ini di Bertuah CRM.
