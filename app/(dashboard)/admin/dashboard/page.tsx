@@ -12,10 +12,28 @@ import {
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { FunnelChart } from "@/components/admin/funnel-chart";
 import { AgentPerformanceTable } from "@/components/admin/agent-performance-table";
-import { ADMIN_KPI } from "@/lib/mock-data";
+import { DateRangeFilter } from "@/components/admin/date-range-filter";
 import { formatCompactRupiah, formatPercent } from "@/lib/format";
+import { createClient } from "@/lib/supabase/server";
+import { getAdminDashboardData } from "@/lib/admin-metrics";
+import { todayWib, startOfMonthWib } from "@/lib/wib-date";
 
-export default function AdminDashboardPage() {
+export default async function AdminDashboardPage({
+  searchParams,
+}: PageProps<"/admin/dashboard">) {
+  const params = await searchParams;
+  const today = todayWib();
+  const fromParam = params.from;
+  const toParam = params.to;
+  const from = typeof fromParam === "string" ? fromParam : startOfMonthWib(today);
+  const to = typeof toParam === "string" ? toParam : today;
+
+  const supabase = await createClient();
+  const { databaseTotal, kpi, funnel, agents } = await getAdminDashboardData(supabase, {
+    from,
+    to,
+  });
+
   return (
     <div className="space-y-6">
       <div>
@@ -27,29 +45,31 @@ export default function AdminDashboardPage() {
         </p>
       </div>
 
+      <DateRangeFilter from={from} to={to} />
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label="Total Panggilan" value={String(ADMIN_KPI.totalCalls)} icon={PhoneCall} />
+        <KpiCard label="Total Panggilan" value={String(kpi.totalCalls)} icon={PhoneCall} />
         <KpiCard
           label="Contact Rate"
-          value={formatPercent(ADMIN_KPI.contactRate)}
+          value={formatPercent(kpi.contactRate)}
           icon={TrendingUp}
         />
-        <KpiCard label="Interest" value={String(ADMIN_KPI.interest)} icon={Sparkles} />
-        <KpiCard label="Hot Leads" value={String(ADMIN_KPI.hotLeads)} icon={Flame} tone="hot" />
+        <KpiCard label="Interest" value={String(kpi.interest)} icon={Sparkles} />
+        <KpiCard label="Hot Leads" value={String(kpi.hotLeads)} icon={Flame} tone="hot" />
         <KpiCard
           label="Ready to Survey"
-          value={String(ADMIN_KPI.readyToSurvey)}
+          value={String(kpi.readyToSurvey)}
           icon={CalendarCheck}
         />
         <KpiCard
           label="Total Aplikasi"
-          value={String(ADMIN_KPI.totalApplications)}
+          value={String(kpi.totalApplications)}
           icon={FileStack}
         />
-        <KpiCard label="Approved" value={String(ADMIN_KPI.approved)} icon={ClipboardCheck} />
+        <KpiCard label="Approved" value={String(kpi.approved)} icon={ClipboardCheck} />
         <KpiCard
           label="Disbursed"
-          value={String(ADMIN_KPI.disbursed)}
+          value={String(kpi.disbursed)}
           icon={CircleCheck}
           tone="success"
         />
@@ -57,18 +77,18 @@ export default function AdminDashboardPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <FunnelChart />
+          <FunnelChart stages={funnel} databaseTotal={databaseTotal} />
         </div>
         <KpiCard
           label="Total Revenue Agregator"
-          value={formatCompactRupiah(ADMIN_KPI.totalRevenue)}
+          value={formatCompactRupiah(kpi.totalRevenue)}
           icon={Banknote}
           hint="Dihitung hanya dari application berstatus Disbursed"
           tone="success"
         />
       </div>
 
-      <AgentPerformanceTable />
+      <AgentPerformanceTable agents={agents} />
     </div>
   );
 }

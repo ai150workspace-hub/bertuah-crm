@@ -14,29 +14,27 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { AGENTS, MOCK_APPLICATIONS } from "@/lib/mock-data";
 import { formatCompactRupiah } from "@/lib/format";
 import { calculateAgentIncentive } from "@/lib/incentive-calculator";
+import type { AgentPerformanceRow } from "@/lib/admin-metrics";
 
 const MONTHLY_TARGET = 250_000_000;
 
-export function AgentPerformanceTable() {
-  const rows = AGENTS.map((agent) => {
-    const disbursed = MOCK_APPLICATIONS.filter(
-      (a) => a.agentId === agent.id && a.statusAplikasi === "Disbursed"
-    ).reduce((sum, a) => sum + a.nominalPencairan, 0);
-
+export function AgentPerformanceTable({ agents }: { agents: AgentPerformanceRow[] }) {
+  const rows = agents.map((agent) => {
+    // avg3MonthDisbursement idealnya rata-rata 3 bulan terakhir - belum ada
+    // riwayat bulanan tersimpan, jadi dipakai sama dengan pencairan periode
+    // ini sebagai pendekatan sementara.
     const incentive = calculateAgentIncentive({
-      agentId: agent.id,
-      agentName: agent.name,
-      totalDisbursement: disbursed,
-      avg3MonthDisbursement: disbursed,
+      agentId: agent.agentId,
+      agentName: agent.agentName,
+      totalDisbursement: agent.disbursed,
+      avg3MonthDisbursement: agent.disbursed,
     });
 
     return {
       agent,
-      disbursed,
-      progress: Math.min(100, Math.round((disbursed / MONTHLY_TARGET) * 100)),
+      progress: Math.min(100, Math.round((agent.disbursed / MONTHLY_TARGET) * 100)),
       incentive,
     };
   });
@@ -45,7 +43,9 @@ export function AgentPerformanceTable() {
     <Card>
       <CardHeader>
         <CardTitle>Performa Agent</CardTitle>
-        <CardDescription>Bulan berjalan · target {formatCompactRupiah(MONTHLY_TARGET)}/agent</CardDescription>
+        <CardDescription>
+          Periode terpilih · target {formatCompactRupiah(MONTHLY_TARGET)}/agent/bulan
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
@@ -53,16 +53,18 @@ export function AgentPerformanceTable() {
             <TableHeader>
               <TableRow>
                 <TableHead>Agent</TableHead>
+                <TableHead>Dial</TableHead>
                 <TableHead>Pencairan</TableHead>
                 <TableHead className="w-[160px]">Progress Target</TableHead>
                 <TableHead className="text-right">Est. Kompensasi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map(({ agent, disbursed, progress, incentive }) => (
-                <TableRow key={agent.id}>
-                  <TableCell className="font-medium">{agent.name}</TableCell>
-                  <TableCell>{formatCompactRupiah(disbursed)}</TableCell>
+              {rows.map(({ agent, progress, incentive }) => (
+                <TableRow key={agent.agentId}>
+                  <TableCell className="font-medium">{agent.agentName}</TableCell>
+                  <TableCell>{agent.totalDial}</TableCell>
+                  <TableCell>{formatCompactRupiah(agent.disbursed)}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Progress value={progress} className="h-2" />
@@ -76,6 +78,13 @@ export function AgentPerformanceTable() {
                   </TableCell>
                 </TableRow>
               ))}
+              {rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    Belum ada agent aktif.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </div>

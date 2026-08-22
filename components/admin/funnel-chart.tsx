@@ -14,7 +14,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { FUNNEL_STAGES } from "@/lib/mock-data";
+import type { FunnelStage } from "@/lib/admin-metrics";
 
 const chartConfig = {
   value: {
@@ -23,27 +23,24 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export function FunnelChart() {
-  // "Database" is orders of magnitude larger than the rest — shown as a
-  // separate stat instead of squashing the funnel bars.
-  const [database, ...stages] = FUNNEL_STAGES;
-
+export function FunnelChart({
+  stages,
+  databaseTotal,
+}: {
+  stages: FunnelStage[];
+  databaseTotal: number;
+}) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>Funnel Pipeline</CardTitle>
         <CardDescription>
-          Dari {database.value.toLocaleString("id-ID")} data {database.label.toLowerCase()}{" "}
-          bulan ini
+          Dari {databaseTotal.toLocaleString("id-ID")} data database (total pool, semua waktu)
         </CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig} className="h-72 w-full">
-          <BarChart
-            data={stages}
-            layout="vertical"
-            margin={{ left: 8, right: 24 }}
-          >
+          <BarChart data={stages} layout="vertical" margin={{ left: 8, right: 24 }}>
             <CartesianGrid horizontal={false} />
             <XAxis type="number" hide />
             <YAxis
