@@ -9,6 +9,8 @@ export interface RawImportRow {
   nama: string;
   noHp: string;
   jenisKendaraan: string;
+  merkTipe: string;
+  tahun: string;
   domisili: string;
   catatan: string;
 }
@@ -21,11 +23,16 @@ export interface ValidatedRow {
   noHpRaw: string;
   noHpNormalized: string | null;
   jenisKendaraan: "Mobil" | "Motor" | null;
+  merkTipe: string;
+  tahun: number | null;
   domisili: string;
   catatan: string;
   status: RowStatus;
   reason?: string;
 }
+
+const TAHUN_MIN = 1990;
+const TAHUN_MAX = 2030;
 
 export interface ValidateImportResult {
   rows: ValidatedRow[];
@@ -38,10 +45,23 @@ export async function validateImportRows(rows: RawImportRow[]): Promise<Validate
   const seenInFile = new Set<string>();
   const prelim: ValidatedRow[] = rows.map((r, index) => {
     const nama = (r.nama ?? "").trim();
-    const jenisRaw = (r.jenisKendaraan ?? "").trim();
+    const jenisRaw = (r.jenisKendaraan ?? "").trim().toLowerCase();
     const jenisKendaraan: "Mobil" | "Motor" | null =
-      jenisRaw === "Mobil" || jenisRaw === "Motor" ? jenisRaw : null;
+      jenisRaw === "mobil" ? "Mobil" : jenisRaw === "motor" ? "Motor" : null;
     const noHpNormalized = normalizePhoneLocal(r.noHp);
+    const merkTipe = (r.merkTipe ?? "").trim();
+
+    const tahunRaw = (r.tahun ?? "").trim();
+    let tahun: number | null = null;
+    let tahunInvalid = false;
+    if (tahunRaw) {
+      const parsed = Number(tahunRaw);
+      if (Number.isInteger(parsed) && parsed >= TAHUN_MIN && parsed <= TAHUN_MAX) {
+        tahun = parsed;
+      } else {
+        tahunInvalid = true;
+      }
+    }
 
     let status: RowStatus = "valid";
     let reason: string | undefined;
@@ -55,6 +75,9 @@ export async function validateImportRows(rows: RawImportRow[]): Promise<Validate
     } else if (!jenisKendaraan) {
       status = "invalid";
       reason = "Jenis kendaraan harus Mobil/Motor";
+    } else if (tahunInvalid) {
+      status = "invalid";
+      reason = `Tahun harus angka ${TAHUN_MIN}-${TAHUN_MAX}`;
     } else if (seenInFile.has(noHpNormalized)) {
       status = "duplicate";
       reason = "Duplikat di dalam file";
@@ -68,6 +91,8 @@ export async function validateImportRows(rows: RawImportRow[]): Promise<Validate
       noHpRaw: r.noHp ?? "",
       noHpNormalized,
       jenisKendaraan,
+      merkTipe,
+      tahun,
       domisili: (r.domisili ?? "").trim(),
       catatan: (r.catatan ?? "").trim(),
       status,
@@ -247,6 +272,8 @@ export async function commitImport(input: CommitImportInput): Promise<CommitImpo
       nama: r.nama,
       no_hp: r.noHpNormalized,
       jenis_kendaraan: r.jenisKendaraan,
+      merk_tipe: r.merkTipe || null,
+      tahun: r.tahun,
       domisili: r.domisili || null,
       notes: r.catatan || null,
       status_call: "Uncalled",

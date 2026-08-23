@@ -45,7 +45,8 @@ import {
 } from "@/app/actions/import";
 
 const TEMPLATE_CSV =
-  "nama,no_hp,jenis_kendaraan,domisili,catatan\nContoh Nama,081234567890,Mobil,Pekanbaru,Contoh catatan\n";
+  "nama,no_hp,jenis_kendaraan,merk_tipe,tahun,domisili,catatan\n" +
+  "Contoh Nama,081234567890,Mobil,Honda CRV,2011,Pekanbaru,Contoh catatan\n";
 
 function downloadTemplate() {
   const blob = new Blob([TEMPLATE_CSV], { type: "text/csv;charset=utf-8;" });
@@ -69,6 +70,8 @@ function mapRow(rec: Record<string, unknown>): RawImportRow {
     nama: getField(rec, "nama"),
     noHp: getField(rec, "no_hp"),
     jenisKendaraan: getField(rec, "jenis_kendaraan"),
+    merkTipe: getField(rec, "merk_tipe"),
+    tahun: getField(rec, "tahun"),
     domisili: getField(rec, "domisili"),
     catatan: getField(rec, "catatan"),
   };
@@ -295,7 +298,11 @@ export function ImportWizard({ agents }: { agents: AgentCapacityInfo[] }) {
                         </TableCell>
                         <TableCell>{r.nama || "—"}</TableCell>
                         <TableCell>{r.noHpNormalized ?? (r.noHpRaw || "—")}</TableCell>
-                        <TableCell>{r.jenisKendaraan ?? "—"}</TableCell>
+                        <TableCell>
+                          {r.jenisKendaraan ?? "—"}
+                          {r.merkTipe && ` · ${r.merkTipe}`}
+                          {r.tahun ? ` (${r.tahun})` : ""}
+                        </TableCell>
                         <TableCell>{r.domisili || "—"}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {r.reason ?? ""}
@@ -433,7 +440,11 @@ export function ImportWizard({ agents }: { agents: AgentCapacityInfo[] }) {
                       <TableRow key={r.index}>
                         <TableCell>{r.nama}</TableCell>
                         <TableCell>{r.noHpNormalized}</TableCell>
-                        <TableCell>{r.jenisKendaraan}</TableCell>
+                        <TableCell>
+                          {r.jenisKendaraan}
+                          {r.merkTipe && ` · ${r.merkTipe}`}
+                          {r.tahun ? ` (${r.tahun})` : ""}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
