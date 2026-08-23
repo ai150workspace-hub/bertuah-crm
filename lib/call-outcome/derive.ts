@@ -97,18 +97,13 @@ export interface EfekSamping {
 }
 
 /** Satu-satunya tempat yang memutuskan apa yang terjadi setelah panggilan dicatat. */
-export function efekSamping(input: InputHasil, sekarang = new Date()): EfekSamping {
+export function efekSamping(input: InputHasil): EfekSamping {
   const h = infoHasil(input.kode);
 
   let jadwalkanPada: Date | null = null;
   if (input.tanggalFollowup) {
     const t = new Date(input.tanggalFollowup);
     if (!Number.isNaN(t.getTime())) jadwalkanPada = t;
-  }
-  // Pikir-pikir tidak minta tanggal ke mitra — sistem yang menjadwalkan H+3,
-  // supaya prospek hangat tidak menguap karena lupa.
-  if (input.kode === 'PIKIR_PIKIR' && !jadwalkanPada) {
-    jadwalkanPada = new Date(sekarang.getTime() + 3 * 24 * 3600 * 1000);
   }
 
   return {

@@ -50,6 +50,12 @@ const BULAN_ID = [
   "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
 ];
 
+/** Tanggal kalender WIB (YYYY-MM-DD) dari sebuah instant timestamptz. */
+export function wibDateFromIso(iso: string): string {
+  const shifted = new Date(new Date(iso).getTime() + WIB_OFFSET_MS);
+  return ymd(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate());
+}
+
 export function formatDateID(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
   return `${d} ${BULAN_ID[m! - 1]} ${y}`;

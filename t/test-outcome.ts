@@ -58,14 +58,18 @@ cek("JANJI_TEMU dengan tanggal lolos", validasiHasil({kode:'JANJI_TEMU',tanggalF
 cek("tanggal masa lalu ditolak",
   validasiHasil({kode:'JANJI_TEMU',tanggalFollowup:'2020-01-01'}).valid, false);
 cek("TIDAK_DIANGKAT tanpa apa-apa lolos", validasiHasil({kode:'TIDAK_DIANGKAT'}).valid, true);
+cek("PIKIR_PIKIR tanpa tanggal ditolak", validasiHasil({kode:'PIKIR_PIKIR'}).valid, false);
+cek("PIKIR_PIKIR dengan tanggal lolos",
+  validasiHasil({kode:'PIKIR_PIKIR',tanggalFollowup:besok}).valid, true);
 
 console.log("\n== efek samping ==");
-const now = new Date('2026-08-22T03:00:00Z');
-cek("PIKIR_PIKIR dijadwalkan H+3 otomatis",
-  efekSamping({kode:'PIKIR_PIKIR'},now).jadwalkanPada?.toISOString().slice(0,10),'2026-08-25');
-cek("JANGAN_HUBUNGI masuk DNC", efekSamping({kode:'JANGAN_HUBUNGI'},now).masukDnc, true);
-cek("MINAT tidak masuk DNC", efekSamping({kode:'MINAT'},now).masukDnc, false);
-cek("MINAT dorong kirim WA", efekSamping({kode:'MINAT'},now).dorongKirimWa, true);
+cek("PIKIR_PIKIR tanpa tanggal -> tidak ada jadwal otomatis (wajib diisi mitra)",
+  efekSamping({kode:'PIKIR_PIKIR'}).jadwalkanPada, null);
+cek("PIKIR_PIKIR dengan tanggal -> terjadwal sesuai input",
+  efekSamping({kode:'PIKIR_PIKIR',tanggalFollowup:'2026-08-24'}).jadwalkanPada?.toISOString().slice(0,10),'2026-08-24');
+cek("JANGAN_HUBUNGI masuk DNC", efekSamping({kode:'JANGAN_HUBUNGI'}).masukDnc, true);
+cek("MINAT tidak masuk DNC", efekSamping({kode:'MINAT'}).masukDnc, false);
+cek("MINAT dorong kirim WA", efekSamping({kode:'MINAT'}).dorongKirimWa, true);
 cek("MINAT -> Hot Lead", statusKontakDari('MINAT'),'Hot Lead');
 cek("PIKIR_PIKIR -> Warm", statusKontakDari('PIKIR_PIKIR'),'Warm');
 cek("NOMOR_SALAH -> Invalid", statusKontakDari('NOMOR_SALAH'),'Invalid');

@@ -40,8 +40,8 @@ export const HASIL_PANGGILAN = [
     grup: 'Bicara dengan orangnya',
     rpc: true,
     statusKontak: 'Warm',
-    wajib: [],
-    aksi: 'Pengingat otomatis H+3.',
+    wajib: ['tanggal_followup'],
+    aksi: 'Masuk antrean pada tanggal yang dijanjikan.',
   },
   {
     kode: 'KONFIRMASI_PASANGAN',

@@ -30,16 +30,31 @@ import { STATUS_CALL_COLORS } from "@/lib/status-colors";
 import { claimLeads } from "@/app/actions/leads";
 import { CustomerDrawer } from "./customer-drawer";
 import type { ProviderCapabilities } from "@/lib/telephony/types";
+import { todayWib, wibDateFromIso, formatDateID } from "@/lib/wib-date";
 
 const FULL_PAGE_SIZE = 25;
 const FILTERABLE_STATUSES: StatusCall[] = ["Uncalled", "In Progress", "Warm", "Hot Lead"];
-type SortKey = "updated" | "nama" | "status";
+type SortKey = "updated" | "nama" | "status" | "followup";
 
 const SORT_LABEL: Record<SortKey, string> = {
   updated: "Last Updated",
   nama: "Nama",
   status: "Status",
+  followup: "Jadwal Follow-up",
 };
+
+function followUpInfo(nextFollowUpAt?: string): { label: string; className: string } | null {
+  if (!nextFollowUpAt) return null;
+  const dueDay = wibDateFromIso(nextFollowUpAt);
+  const today = todayWib();
+  if (dueDay < today) {
+    return { label: `Terlambat · ${formatDateID(dueDay)}`, className: "text-destructive font-medium" };
+  }
+  if (dueDay === today) {
+    return { label: "Hari ini", className: "text-warning-foreground font-medium" };
+  }
+  return { label: formatDateID(dueDay), className: "text-muted-foreground" };
+}
 
 /**
  * Dipakai di dua tempat: versi ringkas di Dashboard (compact) dan versi
@@ -75,6 +90,12 @@ export function QueueTable({
     filtered = [...filtered].sort((a, b) => {
       if (sortKey === "nama") return a.nama.localeCompare(b.nama);
       if (sortKey === "status") return a.statusCall.localeCompare(b.statusCall);
+      if (sortKey === "followup") {
+        // Belum ada jadwal ditaruh paling belakang - bukan prioritas.
+        const av = a.nextFollowUpAt ?? "9999-12-31";
+        const bv = b.nextFollowUpAt ?? "9999-12-31";
+        return av.localeCompare(bv);
+      }
       const at = a.lastContactedAt ? new Date(a.lastContactedAt).getTime() : 0;
       const bt = b.lastContactedAt ? new Date(b.lastContactedAt).getTime() : 0;
       return bt - at;
@@ -181,6 +202,7 @@ export function QueueTable({
               <TableHead className="hidden md:table-cell">Area</TableHead>
               <TableHead>Status Call</TableHead>
               <TableHead className="hidden sm:table-cell">Last Call</TableHead>
+              <TableHead>Jadwal Follow-up</TableHead>
               <TableHead className="text-right">Aksi</TableHead>
             </TableRow>
           </TableHeader>
@@ -224,6 +246,16 @@ export function QueueTable({
                         })
                       : "—"}
                   </TableCell>
+                  <TableCell>
+                    {(() => {
+                      const fu = followUpInfo(c.nextFollowUpAt);
+                      return fu ? (
+                        <span className={cn("text-sm", fu.className)}>{fu.label}</span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      );
+                    })()}
+                  </TableCell>
                   <TableCell className="text-right">
                     <span title={invalid ? "Nomor tidak valid" : undefined}>
                       <Button
@@ -244,7 +276,7 @@ export function QueueTable({
             })}
             {pageItems.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   Tidak ada lead yang cocok.
                 </TableCell>
               </TableRow>
