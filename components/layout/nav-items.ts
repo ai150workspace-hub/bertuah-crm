@@ -41,12 +41,7 @@ export const ADMIN_NAV: NavItem[] = [
     icon: Building2,
     comingSoon: true,
   },
-  {
-    label: "Applications",
-    href: "/admin/applications",
-    icon: FileStack,
-    comingSoon: true,
-  },
+  { label: "Applications", href: "/admin/applications", icon: FileStack },
   {
     label: "Import Data",
     href: "/admin/import",
