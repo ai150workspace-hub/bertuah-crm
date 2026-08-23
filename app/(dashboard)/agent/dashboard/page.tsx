@@ -12,7 +12,7 @@ import { QueueTable } from "@/components/agent/QueueTable";
 import { AGENT_KPI } from "@/lib/mock-data";
 import { formatCompactRupiah, formatPercent } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
-import { CONTACT_SELECT, mapDbContact, type ContactRow } from "@/lib/contacts";
+import { CONTACT_SELECT, mapDbContact, getActiveSlots, type ContactRow } from "@/lib/contacts";
 import { getCapabilities } from "@/lib/telephony/provider";
 
 export default async function AgentDashboardPage() {
@@ -36,6 +36,7 @@ export default async function AgentDashboardPage() {
   const contacts = ((contactRows ?? []) as ContactRow[]).map(mapDbContact);
   const hotLeads = contacts.filter((c) => c.statusCall === "Hot Lead").length;
   const capabilities = await getCapabilities();
+  const activeSlots = user ? await getActiveSlots(supabase, user.id) : null;
 
   return (
     <div className="space-y-6">
@@ -80,7 +81,7 @@ export default async function AgentDashboardPage() {
         />
       </div>
 
-      <QueueTable contacts={contacts} capabilities={capabilities} compact />
+      <QueueTable contacts={contacts} capabilities={capabilities} activeSlots={activeSlots} compact />
     </div>
   );
 }

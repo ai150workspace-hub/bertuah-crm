@@ -156,11 +156,13 @@ export async function getAgentCapacities(): Promise<AgentCapacityInfo[]> {
   const agents = agentRows ?? [];
   const results = await Promise.all(
     agents.map(async (a) => {
+      // Active slots (Uncalled + In Progress + Warm) - Invalid/Hot Lead/
+      // Closed tidak dihitung. Lihat 0010_active_slot_capacity.sql.
       const { count } = await supabase
         .from("contacts")
         .select("*", { count: "exact", head: true })
         .eq("assigned_to", a.id)
-        .eq("status_call", "Uncalled");
+        .in("status_call", ["Uncalled", "In Progress", "Warm"]);
       return {
         agentId: a.id as string,
         agentName: a.name as string,

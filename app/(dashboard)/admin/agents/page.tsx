@@ -75,7 +75,12 @@ export default async function AdminAgentsPage({
     { data: recentLogRows },
     { data: appRows },
   ] = await Promise.all([
-    supabase.from("users").select("id, name").eq("role", "agent").eq("is_active", true).order("name"),
+    supabase
+      .from("users")
+      .select("id, name, kapasitas_data")
+      .eq("role", "agent")
+      .eq("is_active", true)
+      .order("name"),
     supabase.from("contacts").select("assigned_to, status_call"),
     supabase
       .from("call_logs")
@@ -219,6 +224,12 @@ export default async function AdminAgentsPage({
 
     const appsAgent = appsAllTimeByAgent.get(agent.id) ?? { total: 0, disbursed: 0 };
     const inProgressCount = agentContacts.filter((c) => c.status_call === "In Progress").length;
+    // Slot aktif (dipakai kapasitas_data) = Uncalled + In Progress + Warm.
+    // Invalid & Hot Lead tidak dihitung - lihat 0010_active_slot_capacity.sql.
+    const activeSlotCount = uncalledCount + inProgressCount + warm;
+    const invalidCount = contacts.filter(
+      (c) => c.assigned_to === agent.id && c.status_call === "Invalid"
+    ).length;
     const funnel: AgentFunnelStage[] = [
       { label: "Uncalled", value: uncalledCount },
       { label: "In Progress", value: inProgressCount },
@@ -235,6 +246,9 @@ export default async function AdminAgentsPage({
       dataDiAssign,
       sudahDikerjakan,
       uncalledSisa: uncalledCount,
+      activeSlotCount,
+      kapasitas: agent.kapasitas_data,
+      invalidCount,
       utilisasiPercent,
       totalCall,
       connected,

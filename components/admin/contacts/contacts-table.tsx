@@ -67,6 +67,11 @@ export function ContactsTable({
   const [assigning, setAssigning] = useState(false);
   const [releasing, setReleasing] = useState(false);
   const [confirmRelease, setConfirmRelease] = useState<string[] | null>(null);
+  const [pendingAssign, setPendingAssign] = useState<{
+    agentId: string;
+    ids: string[];
+    warning: string;
+  } | null>(null);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -83,16 +88,22 @@ export function ContactsTable({
     );
   }
 
-  async function handleAssign(agentId: string, ids: string[]) {
+  async function handleAssign(agentId: string, ids: string[], force = false) {
     setAssigning(true);
-    const result = await assignContacts(ids, agentId);
+    const result = await assignContacts(ids, agentId, force);
     setAssigning(false);
+
+    if (result.warning) {
+      setPendingAssign({ agentId, ids, warning: result.warning });
+      return;
+    }
     if (!result.success) {
       toast.error("Gagal assign.", { description: result.error });
       return;
     }
     toast.success(`${ids.length} kontak di-assign.`);
     setSelected(new Set());
+    setPendingAssign(null);
     router.refresh();
   }
 
@@ -268,6 +279,29 @@ export function ContactsTable({
             >
               {releasing && <Loader2 className="h-4 w-4 animate-spin" />}
               Ya, Lepas ke Pool
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pendingAssign} onOpenChange={(o) => !o && setPendingAssign(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Melebihi Kapasitas Normal</DialogTitle>
+            <DialogDescription>{pendingAssign?.warning}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPendingAssign(null)} disabled={assigning}>
+              Batal
+            </Button>
+            <Button
+              onClick={() =>
+                pendingAssign && handleAssign(pendingAssign.agentId, pendingAssign.ids, true)
+              }
+              disabled={assigning}
+            >
+              {assigning && <Loader2 className="h-4 w-4 animate-spin" />}
+              Ya, Lanjutkan
             </Button>
           </DialogFooter>
         </DialogContent>

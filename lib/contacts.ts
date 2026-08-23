@@ -1,4 +1,6 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Contact, StatusCall, VehicleType } from "@/types";
+import type { ActiveSlotsInfo } from "@/components/agent/QueueTable";
 
 /** Raw shape selected from public.contacts. */
 export interface ContactRow {
@@ -37,3 +39,21 @@ export function mapDbContact(row: ContactRow): Contact {
 
 export const CONTACT_SELECT =
   "id, nama, no_hp, jenis_kendaraan, merk_tipe, tahun, domisili, status_pajak, status_call, status_prospek, assigned_to, last_contacted_at, next_follow_up_at";
+
+/** Slot aktif (Uncalled + In Progress + Warm) - lihat 0010_active_slot_capacity.sql. */
+export async function getActiveSlots(
+  supabase: SupabaseClient,
+  agentId: string
+): Promise<ActiveSlotsInfo | null> {
+  const { data } = await supabase.rpc("get_agent_active_slots", { p_agent_id: agentId });
+  const row = data?.[0] as
+    | { active_count: number; kapasitas: number; available: number; is_full: boolean }
+    | undefined;
+  if (!row) return null;
+  return {
+    activeCount: row.active_count,
+    kapasitas: row.kapasitas,
+    available: row.available,
+    isFull: row.is_full,
+  };
+}

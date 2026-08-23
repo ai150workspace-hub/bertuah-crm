@@ -1,6 +1,6 @@
 import { QueueTable } from "@/components/agent/QueueTable";
 import { createClient } from "@/lib/supabase/server";
-import { CONTACT_SELECT, mapDbContact, type ContactRow } from "@/lib/contacts";
+import { CONTACT_SELECT, mapDbContact, getActiveSlots, type ContactRow } from "@/lib/contacts";
 import { getCapabilities } from "@/lib/telephony/provider";
 
 export default async function AgentQueuePage() {
@@ -19,6 +19,7 @@ export default async function AgentQueuePage() {
 
   const contacts = ((contactRows ?? []) as ContactRow[]).map(mapDbContact);
   const capabilities = await getCapabilities();
+  const activeSlots = user ? await getActiveSlots(supabase, user.id) : null;
 
   return (
     <div className="space-y-6">
@@ -29,7 +30,7 @@ export default async function AgentQueuePage() {
         </p>
       </div>
 
-      <QueueTable contacts={contacts} capabilities={capabilities} />
+      <QueueTable contacts={contacts} capabilities={capabilities} activeSlots={activeSlots} />
     </div>
   );
 }

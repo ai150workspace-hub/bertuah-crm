@@ -7,7 +7,11 @@ import { createServiceRoleClient } from "@/lib/supabase/service";
 export interface ContactsActionResult {
   success: boolean;
   error?: string;
+  /** Melebihi kapasitas normal (bukan hard ceiling) - minta konfirmasi, belum diblokir. */
+  warning?: string;
 }
+
+const HARD_CEILING = 70;
 
 /** Session client hanya dipakai untuk verifikasi siapa yang memanggil. */
 async function requireAdmin(): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -29,7 +33,8 @@ async function requireAdmin(): Promise<{ ok: true } | { ok: false; error: string
 
 export async function assignContacts(
   contactIds: string[],
-  agentId: string
+  agentId: string,
+  force = false
 ): Promise<ContactsActionResult> {
   const check = await requireAdmin();
   if (!check.ok) return { success: false, error: check.error };
@@ -47,18 +52,31 @@ export async function assignContacts(
     .maybeSingle();
   if (!agent) return { success: false, error: "Agent tujuan tidak ditemukan." };
 
-  const { count: existingUncalled } = await service
-    .from("contacts")
-    .select("*", { count: "exact", head: true })
-    .eq("assigned_to", agentId)
-    .eq("status_call", "Uncalled");
+  // Active slots (Uncalled + In Progress + Warm) - Invalid/Hot Lead/Closed
+  // tidak dihitung. Lihat 0010_active_slot_capacity.sql.
+  const { data: slotsRows, error: slotsError } = await service.rpc("get_agent_active_slots", {
+    p_agent_id: agentId,
+  });
+  if (slotsError) return { success: false, error: slotsError.message };
+  const slots = slotsRows?.[0] as
+    | { active_count: number; kapasitas: number; available: number; is_full: boolean }
+    | undefined;
+  if (!slots) return { success: false, error: "Gagal membaca kapasitas agent." };
 
-  const projected = (existingUncalled ?? 0) + contactIds.length;
-  if (projected > agent.kapasitas_data) {
-    const sisa = Math.max(0, agent.kapasitas_data - (existingUncalled ?? 0));
+  const projected = slots.active_count + contactIds.length;
+
+  if (projected > HARD_CEILING) {
+    const sisa = Math.max(0, HARD_CEILING - slots.active_count);
     return {
       success: false,
-      error: `Agent ${agent.name} hanya punya ${sisa} slot tersisa, kamu memilih ${contactIds.length} kontak.`,
+      error: `Agent ${agent.name} hanya punya ${sisa} slot aktif tersisa. Kamu memilih ${contactIds.length} kontak. Maksimum yang bisa diassign: ${sisa}.`,
+    };
+  }
+
+  if (projected > agent.kapasitas_data && !force) {
+    return {
+      success: false,
+      warning: `Melebihi kapasitas normal agent (${agent.kapasitas_data}). Lanjutkan? (Batas sistem: ${HARD_CEILING})`,
     };
   }
 

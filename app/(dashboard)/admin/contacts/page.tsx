@@ -38,14 +38,16 @@ export default async function AdminContactsPage({
   const agents = agentRows ?? [];
   const agentNameMap = new Map(agents.map((a) => [a.id, a.name]));
 
-  // Kapasitas terpakai (Uncalled) tiap agent - dipakai dropdown Assign.
+  // Kapasitas terpakai (active slots: Uncalled + In Progress + Warm) tiap
+  // agent - dipakai dropdown Assign. Invalid/Hot Lead/Closed tidak dihitung
+  // (lihat 0010_active_slot_capacity.sql).
   const agentCapacities = await Promise.all(
     agents.map(async (a) => {
       const { count } = await supabase
         .from("contacts")
         .select("*", { count: "exact", head: true })
         .eq("assigned_to", a.id)
-        .eq("status_call", "Uncalled");
+        .in("status_call", ["Uncalled", "In Progress", "Warm"]);
       return { agentId: a.id, agentName: a.name, used: count ?? 0, capacity: a.kapasitas_data };
     })
   );

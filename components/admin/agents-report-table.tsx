@@ -46,6 +46,10 @@ export interface AgentReportRow {
   sudahDikerjakan: number;
   uncalledSisa: number;
   utilisasiPercent: number | null;
+  // Kapasitas slot aktif (Uncalled + In Progress + Warm)
+  activeSlotCount: number;
+  kapasitas: number;
+  invalidCount: number;
   // Activity Panggilan (periode)
   totalCall: number;
   connected: number;
@@ -195,7 +199,22 @@ function AgentRow({ row }: { row: AgentReportRow }) {
             </Badge>
           )}
         </TableCell>
-        <TableCell>{row.dataDiAssign}</TableCell>
+        <TableCell>
+          <div>
+            {row.activeSlotCount} aktif / {row.kapasitas} kapasitas
+          </div>
+          {(row.invalidCount > 0 || row.hotLead > 0) && (
+            <div className="text-[11px] text-muted-foreground">
+              {[
+                row.invalidCount > 0 ? `+${row.invalidCount} Invalid` : null,
+                row.hotLead > 0 ? `+${row.hotLead} Hot Lead` : null,
+              ]
+                .filter(Boolean)
+                .join(", ")}{" "}
+              (tidak dihitung)
+            </div>
+          )}
+        </TableCell>
         <TableCell>{row.sudahDikerjakan}</TableCell>
         <TableCell>{row.uncalledSisa}</TableCell>
         <TableCell className={utilisasiColor(row.utilisasiPercent)}>{pct(row.utilisasiPercent)}</TableCell>
@@ -273,7 +292,7 @@ export function AgentsReportTable({ rows }: { rows: AgentReportRow[] }) {
           <TableRow>
             <TableHead>Agen</TableHead>
             <TableHead>Status Aktif</TableHead>
-            <TableHead>Data Di-assign</TableHead>
+            <TableHead>Slot Aktif</TableHead>
             <TableHead>Sudah Dikerjakan</TableHead>
             <TableHead>Uncalled Sisa</TableHead>
             <TableHead>Utilisasi %</TableHead>

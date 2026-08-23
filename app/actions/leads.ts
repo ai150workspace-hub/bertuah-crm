@@ -25,6 +25,15 @@ export async function claimLeads(batchSize = 15): Promise<ClaimLeadsResult> {
 
   if (error) return { success: false, error: error.message };
 
+  // RPC sekarang RETURNS TABLE(assigned_count, rejected_reason) - satu
+  // baris, bukan lagi setof contacts. Lihat 0010_active_slot_capacity.sql.
+  const result = data?.[0];
+  if (!result) return { success: false, error: "Tidak ada respons dari server." };
+  if (result.rejected_reason) {
+    return { success: false, error: result.rejected_reason };
+  }
+
   revalidatePath("/agent/dashboard");
-  return { success: true, claimed: data?.length ?? 0 };
+  revalidatePath("/agent/queue");
+  return { success: true, claimed: result.assigned_count ?? 0 };
 }

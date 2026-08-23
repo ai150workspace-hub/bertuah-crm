@@ -56,6 +56,20 @@ function followUpInfo(nextFollowUpAt?: string): { label: string; className: stri
   return { label: formatDateID(dueDay), className: "text-muted-foreground" };
 }
 
+export interface ActiveSlotsInfo {
+  activeCount: number;
+  kapasitas: number;
+  available: number;
+  isFull: boolean;
+}
+
+function capacityBarColor(activeCount: number, kapasitas: number): string {
+  if (kapasitas <= 0) return "bg-muted-foreground";
+  if (activeCount >= kapasitas * 0.8) return "bg-destructive";
+  if (activeCount >= kapasitas * 0.5) return "bg-warning";
+  return "bg-success";
+}
+
 /**
  * Dipakai di dua tempat: versi ringkas di Dashboard (compact) dan versi
  * halaman penuh di /agent/queue (filter + sort + pagination aktif).
@@ -63,10 +77,12 @@ function followUpInfo(nextFollowUpAt?: string): { label: string; className: stri
 export function QueueTable({
   contacts,
   capabilities,
+  activeSlots,
   compact = false,
 }: {
   contacts: Contact[];
   capabilities: ProviderCapabilities;
+  activeSlots?: ActiveSlotsInfo | null;
   compact?: boolean;
 }) {
   const router = useRouter();
@@ -133,6 +149,29 @@ export function QueueTable({
           <p className="text-sm text-muted-foreground">
             {contacts.length} lead dalam antrean kamu
           </p>
+          {activeSlots && (
+            <div className="mt-1.5 flex items-center gap-2">
+              <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn(
+                    "h-full transition-all",
+                    capacityBarColor(activeSlots.activeCount, activeSlots.kapasitas)
+                  )}
+                  style={{
+                    width: `${Math.min(100, (activeSlots.activeCount / Math.max(1, activeSlots.kapasitas)) * 100)}%`,
+                  }}
+                />
+              </div>
+              <span className="text-xs text-muted-foreground">
+                {activeSlots.activeCount} / {activeSlots.kapasitas} slot aktif terpakai
+              </span>
+            </div>
+          )}
+          {activeSlots && (
+            <p className="text-[11px] text-muted-foreground/70">
+              (Invalid &amp; Hot Lead tidak dihitung)
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
@@ -186,10 +225,18 @@ export function QueueTable({
             </>
           )}
 
-          <Button onClick={handleClaim} disabled={claiming}>
-            <Plus className="h-4 w-4" />
-            {claiming ? "Mengambil..." : "Ambil Data Baru"}
-          </Button>
+          <span
+            title={
+              activeSlots?.isFull
+                ? `Antrean aktif penuh (${activeSlots.activeCount}/${activeSlots.kapasitas}). Selesaikan dulu.`
+                : undefined
+            }
+          >
+            <Button onClick={handleClaim} disabled={claiming || activeSlots?.isFull}>
+              <Plus className="h-4 w-4" />
+              {claiming ? "Mengambil..." : "Ambil Data Baru"}
+            </Button>
+          </span>
         </div>
       </div>
 
