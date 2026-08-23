@@ -57,7 +57,7 @@ export const ADMIN_NAV: NavItem[] = [
     href: "/admin/import",
     icon: UploadCloud,
   },
-  { label: "Insentif", href: "/admin/incentives", icon: Wallet, comingSoon: true },
+  { label: "Insentif", href: "/admin/incentives", icon: Wallet },
   {
     label: "Audit Log",
     href: "/admin/audit-log",
