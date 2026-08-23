@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { NEXT_ALLOWED_STATUS, type NextApplicationStatus } from "@/lib/applications";
+import { todayWib } from "@/lib/wib-date";
 
 export interface ApplicationActionResult {
   success: boolean;
@@ -119,8 +120,11 @@ export async function advanceApplicationStatus(
   if (input.nextStatus === "Disbursed" && (!input.nominalPencairan || input.nominalPencairan <= 0)) {
     return { success: false, error: "Nominal pencairan wajib diisi." };
   }
+  if (input.dateValue && input.dateValue > todayWib()) {
+    return { success: false, error: "Tanggal tidak boleh di masa depan." };
+  }
 
-  const dateOnly = input.dateValue ?? new Date().toISOString().slice(0, 10);
+  const dateOnly = input.dateValue ?? todayWib();
   const update: Record<string, unknown> = { status_aplikasi: input.nextStatus };
 
   if (input.nextStatus === "Sent to Leasing") {

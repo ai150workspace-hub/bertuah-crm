@@ -25,8 +25,7 @@ import {
 import { toast } from "sonner";
 import { advanceApplicationStatus } from "@/app/actions/applications";
 import { NEXT_ALLOWED_STATUS, type NextApplicationStatus } from "@/lib/applications";
-
-const todayStr = () => new Date().toISOString().slice(0, 10);
+import { todayWib } from "@/lib/wib-date";
 
 export function UpdateApplicationStatusDialog({
   applicationId,
@@ -45,14 +44,14 @@ export function UpdateApplicationStatusDialog({
   const [saving, setSaving] = useState(false);
   const options = NEXT_ALLOWED_STATUS[currentStatus] ?? [];
   const [nextStatus, setNextStatus] = useState<NextApplicationStatus | "">(options[0] ?? "");
-  const [dateValue, setDateValue] = useState(todayStr());
+  const [dateValue, setDateValue] = useState(todayWib());
   const [nominalPencairan, setNominalPencairan] = useState("");
   const [angsuranPerBulan, setAngsuranPerBulan] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
 
   function resetAndClose() {
     setNextStatus(options[0] ?? "");
-    setDateValue(todayStr());
+    setDateValue(todayWib());
     setNominalPencairan("");
     setAngsuranPerBulan("");
     setRejectionReason("");
@@ -132,9 +131,13 @@ export function UpdateApplicationStatusDialog({
                 <input
                   type="date"
                   value={dateValue}
+                  max={todayWib()}
                   onChange={(e) => setDateValue(e.target.value)}
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Tanggal kejadian ini terjadi, tidak boleh di masa depan.
+                </p>
               </div>
             )}
 
