@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { RupiahInput } from "@/components/ui/rupiah-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -141,23 +141,16 @@ export function UpdateApplicationStatusDialog({
             {nextStatus === "Disbursed" && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Nominal Pencairan (Rp)</Label>
-                  <Input
-                    type="number"
-                    min="0"
+                  <Label className="text-xs">Nominal Pencairan</Label>
+                  <RupiahInput
                     value={nominalPencairan}
-                    onChange={(e) => setNominalPencairan(e.target.value)}
-                    placeholder="50000000"
+                    onChange={setNominalPencairan}
+                    placeholder="50.000.000"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Angsuran/bulan (opsional)</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={angsuranPerBulan}
-                    onChange={(e) => setAngsuranPerBulan(e.target.value)}
-                  />
+                  <RupiahInput value={angsuranPerBulan} onChange={setAngsuranPerBulan} />
                 </div>
               </div>
             )}
@@ -165,12 +158,7 @@ export function UpdateApplicationStatusDialog({
             {nextStatus === "Approved" && (
               <div className="space-y-1.5">
                 <Label className="text-xs">Angsuran/bulan (opsional)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={angsuranPerBulan}
-                  onChange={(e) => setAngsuranPerBulan(e.target.value)}
-                />
+                <RupiahInput value={angsuranPerBulan} onChange={setAngsuranPerBulan} />
               </div>
             )}
 
