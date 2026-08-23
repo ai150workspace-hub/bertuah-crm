@@ -65,12 +65,27 @@ function getField(rec: Record<string, unknown>, key: string): string {
   return found ? String(rec[found] ?? "").trim() : "";
 }
 
+function hasColumn(rec: Record<string, unknown>, key: string): boolean {
+  return Object.keys(rec).some((k) => k.trim().toLowerCase() === key);
+}
+
 function mapRow(rec: Record<string, unknown>): RawImportRow {
+  // Beberapa template yang beredar menamai kolom Mobil/Motor sebagai
+  // "tipe_kendaraan" dan menaruh merk/model di "jenis_kendaraan" - kebalikan
+  // dari nama kolom di database. Kalau "tipe_kendaraan" ada di file, anggap
+  // itu yang dipakai untuk Mobil/Motor, dan "jenis_kendaraan" jadi merk/tipe -
+  // supaya tidak perlu rename manual di spreadsheet.
+  const usesTipeKendaraanAlias = hasColumn(rec, "tipe_kendaraan");
+
   return {
     nama: getField(rec, "nama"),
     noHp: getField(rec, "no_hp"),
-    jenisKendaraan: getField(rec, "jenis_kendaraan"),
-    merkTipe: getField(rec, "merk_tipe"),
+    jenisKendaraan: usesTipeKendaraanAlias
+      ? getField(rec, "tipe_kendaraan")
+      : getField(rec, "jenis_kendaraan"),
+    merkTipe: usesTipeKendaraanAlias
+      ? getField(rec, "jenis_kendaraan")
+      : getField(rec, "merk_tipe"),
     tahun: getField(rec, "tahun"),
     domisili: getField(rec, "domisili"),
     catatan: getField(rec, "catatan"),

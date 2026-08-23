@@ -24,6 +24,12 @@
 .DS_Store
 *.pem
 
+# local test data files (not app source) - keep these out of the repo
+*.csv
+*.xls
+*.xlsx
+~$*
+
 # debug
 npm-debug.log*
 yarn-debug.log*
