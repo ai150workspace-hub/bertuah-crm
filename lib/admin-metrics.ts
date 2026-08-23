@@ -102,16 +102,16 @@ export async function getAdminDashboardData(
   const interest = logs.filter((l) => l.hasil === "MINAT").length;
   const hotLeads = logs.filter((l) => l.hasil === "MINAT" || l.hasil === "JANJI_TEMU").length;
 
-  // "Ready to Survey" bukan status_aplikasi formal di skema ini (lihat
-  // FinMatch_PKU_PRD.md) - didekati dari application yang masih Draft,
-  // dibuat dalam periode terpilih.
-  const readyToSurvey = apps.filter(
-    (a) => a.status_aplikasi === "Draft" && inWibRange(a.created_at, startIso, endIso)
-  ).length;
   const totalApplications = apps.filter((a) => inWibRange(a.created_at, startIso, endIso)).length;
   const sentToLeasing = apps.filter(
     (a) => a.status_aplikasi === "Sent to Leasing" && inWibRange(a.date_submitted, startIso, endIso)
   ).length;
+  // "Ready to Survey" = aplikasi yang sudah dikirim ke leasing, tinggal
+  // menunggu jadwal survey - sama dengan hitungan status_aplikasi
+  // "Sent to Leasing" di funnel. Sebelumnya didekati dari Draft (belum
+  // ada status "Sent to Leasing" yang genuine saat ditulis) - sekarang
+  // alur agent sudah menghasilkan data status asli, jadi dipakai langsung.
+  const readyToSurvey = sentToLeasing;
   const survey = apps.filter(
     (a) => a.status_aplikasi === "Survey" && dateInRange(a.date_survey, range)
   ).length;
