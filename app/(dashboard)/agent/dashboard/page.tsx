@@ -8,7 +8,7 @@ import {
   Banknote,
 } from "lucide-react";
 import { KpiCard } from "@/components/dashboard/kpi-card";
-import { LeadQueueTable } from "@/components/agent/lead-queue-table";
+import { QueueTable } from "@/components/agent/QueueTable";
 import { AGENT_KPI } from "@/lib/mock-data";
 import { formatCompactRupiah, formatPercent } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -80,7 +80,7 @@ export default async function AgentDashboardPage() {
         />
       </div>
 
-      <LeadQueueTable contacts={contacts} capabilities={capabilities} />
+      <QueueTable contacts={contacts} capabilities={capabilities} compact />
     </div>
   );
 }

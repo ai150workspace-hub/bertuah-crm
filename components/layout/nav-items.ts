@@ -21,7 +21,7 @@ export interface NavItem {
 
 export const AGENT_NAV: NavItem[] = [
   { label: "Dashboard", href: "/agent/dashboard", icon: LayoutDashboard },
-  { label: "Antrean Saya", href: "/agent/leads", icon: Users, comingSoon: true },
+  { label: "Antrean Saya", href: "/agent/queue", icon: Users },
   {
     label: "Aplikasi Saya",
     href: "/agent/applications",
@@ -38,7 +38,7 @@ export const AGENT_NAV: NavItem[] = [
 
 export const ADMIN_NAV: NavItem[] = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-  { label: "Contacts", href: "/admin/contacts", icon: Users, comingSoon: true },
+  { label: "Contacts", href: "/admin/contacts", icon: Users },
   { label: "Agents", href: "/admin/agents", icon: UserCog, comingSoon: true },
   {
     label: "Leasing Partners",
