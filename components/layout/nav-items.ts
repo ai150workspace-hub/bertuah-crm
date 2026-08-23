@@ -39,7 +39,7 @@ export const AGENT_NAV: NavItem[] = [
 export const ADMIN_NAV: NavItem[] = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Contacts", href: "/admin/contacts", icon: Users },
-  { label: "Agents", href: "/admin/agents", icon: UserCog, comingSoon: true },
+  { label: "Agents", href: "/admin/agents", icon: UserCog },
   {
     label: "Leasing Partners",
     href: "/admin/leasing",
