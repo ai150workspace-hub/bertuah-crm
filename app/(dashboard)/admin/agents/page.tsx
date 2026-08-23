@@ -10,6 +10,7 @@ import {
   type AgentCallDistribution,
   type AgentRecentCall,
 } from "@/components/admin/agents-report-table";
+import type { AgentStatus, HeldContact, OtherAgentOption } from "@/components/admin/AgentStatusControls";
 import { DatabaseHealthCard, type DatabaseHealthData } from "@/components/admin/database-health-card";
 import { AgentsExportButton } from "@/components/admin/agents-export-button";
 import { createClient } from "@/lib/supabase/server";
@@ -22,6 +23,9 @@ const HASIL_LABEL = new Map(HASIL_PANGGILAN.map((h) => [h.kode, h.label]));
 const HASIL_STATUS_KONTAK = new Map(HASIL_PANGGILAN.map((h) => [h.kode, h.statusKontak]));
 
 interface ContactRow {
+  id: string;
+  nama: string;
+  no_hp: string;
   assigned_to: string | null;
   status_call: string;
 }
@@ -77,11 +81,10 @@ export default async function AdminAgentsPage({
   ] = await Promise.all([
     supabase
       .from("users")
-      .select("id, name, kapasitas_data")
+      .select("id, name, kapasitas_data, agent_status, pause_started_at, pause_max_days")
       .eq("role", "agent")
-      .eq("is_active", true)
       .order("name"),
-    supabase.from("contacts").select("assigned_to, status_call"),
+    supabase.from("contacts").select("id, nama, no_hp, assigned_to, status_call"),
     supabase
       .from("call_logs")
       .select("agent_id, level_1, hasil, timestamp")
@@ -263,7 +266,33 @@ export default async function AdminAgentsPage({
       funnel,
       callDistribution,
       recentCalls,
+      agentStatus: agent.agent_status as AgentStatus,
+      pauseStartedAt: agent.pause_started_at,
+      pauseMaxDays: agent.pause_max_days,
+      heldContacts: [],
+      otherAgents: [],
     };
+  });
+
+  // Kontak ditahan (untuk agen Pause) & daftar agen aktif lain (untuk
+  // dropdown "Assign ke Agen Lain") - ditempel langsung ke tiap row
+  // supaya tidak perlu lewatkan Map terpisah ke client component.
+  const rowsWithStatus = rows.map((row) => {
+    const heldContacts: HeldContact[] =
+      row.agentStatus === "pause"
+        ? (contactsByAgent.get(row.agentId) ?? [])
+            .filter((c) => c.status_call !== "Closed")
+            .map((c) => ({ id: c.id, nama: c.nama, noHp: c.no_hp, statusCall: c.status_call }))
+        : [];
+    const otherAgents: OtherAgentOption[] = rows
+      .filter((r) => r.agentId !== row.agentId && r.agentStatus === "active")
+      .map((r) => ({
+        agentId: r.agentId,
+        agentName: r.agentName,
+        used: r.activeSlotCount,
+        capacity: r.kapasitas,
+      }));
+    return { ...row, heldContacts, otherAgents };
   });
 
   // ---- Section 4: Health Database Keseluruhan (semua contacts, semua status) ----
@@ -328,7 +357,7 @@ export default async function AdminAgentsPage({
         <AgentsExportButton rows={rows} health={health} periodeTo={to} />
       </div>
 
-      <AgentsReportTable rows={rows} />
+      <AgentsReportTable rows={rowsWithStatus} />
 
       <DatabaseHealthCard data={health} />
     </div>

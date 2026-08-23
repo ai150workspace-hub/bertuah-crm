@@ -15,6 +15,12 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { formatRupiah } from "@/lib/format";
+import {
+  AgentStatusControls,
+  type AgentStatus,
+  type HeldContact,
+  type OtherAgentOption,
+} from "@/components/admin/AgentStatusControls";
 
 export interface AgentFunnelStage {
   label: string;
@@ -67,6 +73,12 @@ export interface AgentReportRow {
   funnel: AgentFunnelStage[];
   callDistribution: AgentCallDistribution;
   recentCalls: AgentRecentCall[];
+  // Status & Kontrol
+  agentStatus: AgentStatus;
+  pauseStartedAt: string | null;
+  pauseMaxDays: number;
+  heldContacts: HeldContact[];
+  otherAgents: OtherAgentOption[];
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -188,6 +200,16 @@ function AgentRow({ row }: { row: AgentReportRow }) {
             {row.agentName}
           </div>
         </TableCell>
+        <TableCell onClick={(e) => e.stopPropagation()}>
+          <AgentStatusControls
+            agentId={row.agentId}
+            agentStatus={row.agentStatus}
+            pauseStartedAt={row.pauseStartedAt}
+            pauseMaxDays={row.pauseMaxDays}
+            heldContacts={row.heldContacts}
+            otherAgents={row.otherAgents}
+          />
+        </TableCell>
         <TableCell>
           {active ? (
             <Badge variant="outline" className="bg-success/15 text-success border-success/30">
@@ -237,7 +259,7 @@ function AgentRow({ row }: { row: AgentReportRow }) {
 
       {open && (
         <TableRow className="bg-muted/20 hover:bg-muted/20">
-          <TableCell colSpan={17} className="p-0">
+          <TableCell colSpan={18} className="p-0">
             <div className="grid gap-4 px-4 py-4 lg:grid-cols-3">
               <div>
                 <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -291,6 +313,7 @@ export function AgentsReportTable({ rows }: { rows: AgentReportRow[] }) {
         <TableHeader>
           <TableRow>
             <TableHead>Agen</TableHead>
+            <TableHead>Status &amp; Kontrol</TableHead>
             <TableHead>Status Aktif</TableHead>
             <TableHead>Slot Aktif</TableHead>
             <TableHead>Sudah Dikerjakan</TableHead>
@@ -315,7 +338,7 @@ export function AgentsReportTable({ rows }: { rows: AgentReportRow[] }) {
           ))}
           {rows.length === 0 && (
             <TableRow>
-              <TableCell colSpan={17} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={18} className="text-center text-muted-foreground py-8">
                 Belum ada agent aktif.
               </TableCell>
             </TableRow>

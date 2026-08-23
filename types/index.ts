@@ -36,6 +36,8 @@ export interface Contact {
   assignedTo?: string;
   lastContactedAt?: string;
   nextFollowUpAt?: string;
+  /** Pernah dihubungi agen lain sebelumnya (recycled dari Warm/In Progress). */
+  hasPreviousCalls?: boolean;
 }
 
 export type ApplicationStatus =

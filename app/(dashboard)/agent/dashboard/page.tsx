@@ -12,7 +12,13 @@ import { QueueTable } from "@/components/agent/QueueTable";
 import { AGENT_KPI } from "@/lib/mock-data";
 import { formatCompactRupiah, formatPercent } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
-import { CONTACT_SELECT, mapDbContact, getActiveSlots, type ContactRow } from "@/lib/contacts";
+import {
+  CONTACT_SELECT,
+  mapDbContact,
+  getActiveSlots,
+  markPreviousCallFlags,
+  type ContactRow,
+} from "@/lib/contacts";
 import { getCapabilities } from "@/lib/telephony/provider";
 
 export default async function AgentDashboardPage() {
@@ -21,7 +27,7 @@ export default async function AgentDashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
   const { data: profile } = user
-    ? await supabase.from("users").select("name").eq("id", user.id).maybeSingle()
+    ? await supabase.from("users").select("name, agent_status").eq("id", user.id).maybeSingle()
     : { data: null };
   const firstName = profile?.name ? profile.name.split(" ")[0] : "";
 
@@ -33,7 +39,8 @@ export default async function AgentDashboardPage() {
         .order("created_at", { ascending: true })
     : { data: null };
 
-  const contacts = ((contactRows ?? []) as ContactRow[]).map(mapDbContact);
+  let contacts = ((contactRows ?? []) as ContactRow[]).map(mapDbContact);
+  if (user) contacts = await markPreviousCallFlags(contacts, user.id);
   const hotLeads = contacts.filter((c) => c.statusCall === "Hot Lead").length;
   const capabilities = await getCapabilities();
   const activeSlots = user ? await getActiveSlots(supabase, user.id) : null;
@@ -81,7 +88,13 @@ export default async function AgentDashboardPage() {
         />
       </div>
 
-      <QueueTable contacts={contacts} capabilities={capabilities} activeSlots={activeSlots} compact />
+      <QueueTable
+        contacts={contacts}
+        capabilities={capabilities}
+        activeSlots={activeSlots}
+        agentStatus={profile?.agent_status as "active" | "pause" | "inactive" | undefined}
+        compact
+      />
     </div>
   );
 }

@@ -2,8 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import { validasiHasil, efekSamping } from "@/lib/call-outcome/derive";
-import type { KodeHasil, KodeSubAlasan } from "@/lib/call-outcome/catalog";
+import { HASIL_PANGGILAN, type KodeHasil, type KodeSubAlasan } from "@/lib/call-outcome/catalog";
+
+const HASIL_LABEL = new Map(HASIL_PANGGILAN.map((h) => [h.kode, h.label]));
 
 export interface SaveCallLogInput {
   contactId: string;
@@ -80,4 +83,64 @@ export async function saveCallLog(
 
   revalidatePath("/agent/dashboard");
   return { success: true, statusKontak: efek.statusKontak };
+}
+
+export interface PreviousCallHistoryEntry {
+  timestamp: string;
+  agentFirstName: string;
+  hasilLabel: string;
+  notes: string | null;
+}
+
+interface PreviousCallLogRow {
+  timestamp: string;
+  hasil: string | null;
+  call_notes: string | null;
+  users: { name: string } | { name: string }[] | null;
+}
+
+function agentNameOf(u: PreviousCallLogRow["users"]): string {
+  const row = Array.isArray(u) ? u[0] : u;
+  return row?.name ?? "Agen";
+}
+
+/**
+ * Ringkasan call log dari agen LAIN (bukan agen yang sedang login) untuk
+ * kontak recycled — supaya mitra baru tahu konteks sebelum menelepon,
+ * tanpa mengekspos nomor HP agen lain atau catatan internal yang penuh.
+ */
+export async function getPreviousCallHistory(
+  contactId: string
+): Promise<PreviousCallHistoryEntry[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // RLS call_logs cuma izinkan agent lihat log miliknya sendiri (by
+  // design). Riwayat dari agen lain di sini butuh service role, jadi
+  // cek dulu manual bahwa kontak ini memang milik agent yang minta.
+  const { data: contact } = await supabase
+    .from("contacts")
+    .select("assigned_to")
+    .eq("id", contactId)
+    .maybeSingle();
+  if (!contact || contact.assigned_to !== user.id) return [];
+
+  const service = createServiceRoleClient();
+  const { data } = await service
+    .from("call_logs")
+    .select("timestamp, hasil, call_notes, users(name)")
+    .eq("contact_id", contactId)
+    .neq("agent_id", user.id)
+    .order("timestamp", { ascending: false })
+    .limit(5);
+
+  return ((data ?? []) as unknown as PreviousCallLogRow[]).map((row) => ({
+    timestamp: row.timestamp,
+    agentFirstName: agentNameOf(row.users).split(" ")[0] ?? "Agen",
+    hasilLabel: row.hasil ? (HASIL_LABEL.get(row.hasil as KodeHasil) ?? row.hasil) : "—",
+    notes: row.call_notes ? row.call_notes.slice(0, 100) : null,
+  }));
 }

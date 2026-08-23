@@ -78,11 +78,13 @@ export function QueueTable({
   contacts,
   capabilities,
   activeSlots,
+  agentStatus,
   compact = false,
 }: {
   contacts: Contact[];
   capabilities: ProviderCapabilities;
   activeSlots?: ActiveSlotsInfo | null;
+  agentStatus?: "active" | "pause" | "inactive";
   compact?: boolean;
 }) {
   const router = useRouter();
@@ -163,13 +165,13 @@ export function QueueTable({
                 />
               </div>
               <span className="text-xs text-muted-foreground">
-                {activeSlots.activeCount} / {activeSlots.kapasitas} slot aktif terpakai
+                {activeSlots.activeCount} aktif / {activeSlots.kapasitas} kapasitas
               </span>
             </div>
           )}
           {activeSlots && (
             <p className="text-[11px] text-muted-foreground/70">
-              (Invalid &amp; Hot Lead tidak dihitung)
+              Warm &amp; In Progress dihitung · Invalid &amp; Hot Lead tidak
             </p>
           )}
         </div>
@@ -227,12 +229,17 @@ export function QueueTable({
 
           <span
             title={
-              activeSlots?.isFull
-                ? `Antrean aktif penuh (${activeSlots.activeCount}/${activeSlots.kapasitas}). Selesaikan dulu.`
-                : undefined
+              agentStatus === "pause"
+                ? "Akunmu sedang di-pause. Hubungi admin untuk mengaktifkan kembali."
+                : activeSlots?.isFull
+                  ? `Antrean aktif penuh (${activeSlots.activeCount}/${activeSlots.kapasitas}). Selesaikan dulu.`
+                  : undefined
             }
           >
-            <Button onClick={handleClaim} disabled={claiming || activeSlots?.isFull}>
+            <Button
+              onClick={handleClaim}
+              disabled={claiming || activeSlots?.isFull || agentStatus === "pause"}
+            >
               <Plus className="h-4 w-4" />
               {claiming ? "Mengambil..." : "Ambil Data Baru"}
             </Button>
@@ -259,8 +266,24 @@ export function QueueTable({
               return (
                 <TableRow key={c.id}>
                   <TableCell>
-                    <div className={cn("font-medium", invalid && "line-through text-muted-foreground")}>
-                      {c.nama}
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={cn(
+                          "font-medium",
+                          invalid && "line-through text-muted-foreground"
+                        )}
+                      >
+                        {c.nama}
+                      </span>
+                      {c.hasPreviousCalls && (
+                        <Badge
+                          variant="outline"
+                          className="bg-indigo-500/10 text-indigo-600 border-indigo-500/20 dark:text-indigo-400 px-1.5 py-0 text-[10px] font-normal"
+                          title="Pernah dihubungi agen lain sebelumnya"
+                        >
+                          🔄 Recycled
+                        </Badge>
+                      )}
                     </div>
                     <div
                       className={cn(

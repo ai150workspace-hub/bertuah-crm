@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Contact, StatusCall, VehicleType } from "@/types";
 import type { ActiveSlotsInfo } from "@/components/agent/QueueTable";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 
 /** Raw shape selected from public.contacts. */
 export interface ContactRow {
@@ -56,4 +57,31 @@ export async function getActiveSlots(
     available: row.available,
     isFull: row.is_full,
   };
+}
+
+/**
+ * Tandai kontak yang pernah dihubungi agen LAIN (recycled dari Warm/In
+ * Progress) - satu query untuk semua kontak, bukan per-kontak.
+ *
+ * RLS call_logs cuma izinkan agent lihat log miliknya sendiri (by
+ * design), jadi query "log dari agen lain" ini butuh service role.
+ * `currentAgentId` datang dari sesi yang sudah terautentikasi di
+ * pemanggil - bukan input bebas dari klien.
+ */
+export async function markPreviousCallFlags(
+  contacts: Contact[],
+  currentAgentId: string
+): Promise<Contact[]> {
+  if (contacts.length === 0) return contacts;
+  const service = createServiceRoleClient();
+  const { data } = await service
+    .from("call_logs")
+    .select("contact_id")
+    .in(
+      "contact_id",
+      contacts.map((c) => c.id)
+    )
+    .neq("agent_id", currentAgentId);
+  const flagged = new Set((data ?? []).map((r) => r.contact_id as string));
+  return contacts.map((c) => ({ ...c, hasPreviousCalls: flagged.has(c.id) }));
 }

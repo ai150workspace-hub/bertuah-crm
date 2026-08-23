@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sheet,
@@ -36,7 +36,7 @@ import {
   type KodeSubAlasan,
 } from "@/lib/call-outcome/catalog";
 import { infoHasil, validasiHasil } from "@/lib/call-outcome/derive";
-import { saveCallLog } from "@/app/actions/call-log";
+import { saveCallLog, getPreviousCallHistory, type PreviousCallHistoryEntry } from "@/app/actions/call-log";
 import { telUri, normalisasiNomor } from "@/lib/telephony/phone";
 import type { ProviderCapabilities } from "@/lib/telephony/types";
 
@@ -59,6 +59,15 @@ export function CustomerDrawer({
   const [simulasiTenor, setSimulasiTenor] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [history, setHistory] = useState<PreviousCallHistoryEntry[]>([]);
+
+  const contactId = contact?.id;
+  const hasPreviousCalls = contact?.hasPreviousCalls;
+  useEffect(() => {
+    if (open && contactId && hasPreviousCalls) {
+      getPreviousCallHistory(contactId).then(setHistory);
+    }
+  }, [open, contactId, hasPreviousCalls]);
 
   if (!contact) return null;
 
@@ -72,6 +81,7 @@ export function CustomerDrawer({
     setSimulasiNominal("");
     setSimulasiTenor("");
     setNotes("");
+    setHistory([]);
   }
 
   async function handleSave() {
@@ -174,6 +184,38 @@ export function CustomerDrawer({
             </div>
             <p className="text-sm text-muted-foreground">{contact.domisili}</p>
           </section>
+
+          {contact.hasPreviousCalls && (
+            <>
+              <Separator />
+              <section className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Riwayat Sebelumnya
+                </h4>
+                {history.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Memuat riwayat...</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {history.map((h, i) => (
+                      <div key={i} className="border-l-2 border-indigo-500/30 pl-2.5 text-sm">
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(h.timestamp).toLocaleDateString("id-ID", {
+                            day: "numeric",
+                            month: "short",
+                          })}{" "}
+                          · {h.agentFirstName}
+                        </div>
+                        <div className="font-medium">{h.hasilLabel}</div>
+                        {h.notes && (
+                          <div className="text-xs text-muted-foreground">&ldquo;{h.notes}&rdquo;</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </>
+          )}
 
           <Separator />
 
