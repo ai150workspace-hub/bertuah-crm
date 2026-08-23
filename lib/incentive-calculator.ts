@@ -1,88 +1,123 @@
-// Agent compensation logic — ported from FinMatch_PKU_PRD_v1.0.md section 19.
-// Boundary interpretation: `>` conditions are literal, so exactly Rp200jt/280jt/350jt/500jt
-// fall into the lower tier. Flag OQ8 in the PRD before payroll goes live.
+// Agent incentive + PKU margin calculator — pure functions, no Supabase import.
+// Business logic as specified by ops (2026-08-23): base salary + per-deal
+// daily commission (rate keyed by tenor) + flat monthly bonus tier.
 
-export const BASE_SALARY = 2_500_000;
+export const AGENT_BASE_SALARY = 1_500_000;
+export const PKU_COMMISSION_RATE = 0.05; // 5% dari nominal pencairan
+export const OPEX_NON_SALARY = 1_960_000; // opex selain gaji, dibagi rata per agent aktif
 
-export interface AgentMonthlyData {
-  agentId: string;
-  agentName: string;
-  totalDisbursement: number;
-  avg3MonthDisbursement: number;
+// ---------------------------------------------------------------------
+// Komisi harian — rate per deal berdasarkan tenor_bulan.
+// Tenor di luar kunci berikut memakai rate tenor terdekat DI BAWAHNYA
+// (tenor 18 -> rate 12, tenor 30 -> rate 24, tenor 42 -> rate 36).
+// ---------------------------------------------------------------------
+const DAILY_RATES: Record<number, number> = {
+  12: 0.0025,
+  24: 0.005,
+  36: 0.01,
+  48: 0.0125,
+};
+
+const DAILY_RATE_TENOR_KEYS = [12, 24, 36, 48];
+
+export function getDailyRate(tenorBulan: number): number {
+  const match = [...DAILY_RATE_TENOR_KEYS].reverse().find((k) => tenorBulan >= k);
+  return DAILY_RATES[match ?? 12]!;
 }
 
-export interface IncentiveResult {
+// ---------------------------------------------------------------------
+// Komisi bulanan — flat bonus berdasarkan TOTAL nominal_pencairan agen
+// dalam bulan tersebut. Tier pertama yang cocok (min <= total < max).
+// ---------------------------------------------------------------------
+export interface MonthlyBonusTier {
+  min: number;
+  max: number;
+  bonus: number;
+  /** Label badge, mis. "≥ Rp350jt". */
+  label: string;
+}
+
+export const MONTHLY_BONUS_TIERS: MonthlyBonusTier[] = [
+  { min: 0, max: 100_000_000, bonus: 0, label: "< Rp100jt" },
+  { min: 100_000_000, max: 150_000_000, bonus: 500_000, label: "≥ Rp100jt" },
+  { min: 150_000_000, max: 200_000_000, bonus: 950_000, label: "≥ Rp150jt" },
+  { min: 200_000_000, max: 250_000_000, bonus: 1_500_000, label: "≥ Rp200jt" },
+  { min: 250_000_000, max: 300_000_000, bonus: 2_100_000, label: "≥ Rp250jt" },
+  { min: 300_000_000, max: 350_000_000, bonus: 2_800_000, label: "≥ Rp300jt" },
+  { min: 350_000_000, max: 400_000_000, bonus: 3_600_000, label: "≥ Rp350jt" },
+  { min: 400_000_000, max: 450_000_000, bonus: 4_500_000, label: "≥ Rp400jt" },
+  { min: 450_000_000, max: 500_000_000, bonus: 5_500_000, label: "≥ Rp450jt" },
+  { min: 500_000_000, max: 550_000_000, bonus: 6_600_000, label: "≥ Rp500jt" },
+  { min: 550_000_000, max: Infinity, bonus: 7_800_000, label: "≥ Rp550jt" },
+];
+
+export function getMonthlyBonusTier(totalPencairan: number): MonthlyBonusTier {
+  return (
+    MONTHLY_BONUS_TIERS.find((t) => totalPencairan >= t.min && totalPencairan < t.max) ??
+    MONTHLY_BONUS_TIERS[MONTHLY_BONUS_TIERS.length - 1]!
+  );
+}
+
+// ---------------------------------------------------------------------
+// Kalkulasi per agent
+// ---------------------------------------------------------------------
+export interface DisbursedDeal {
+  nominalPencairan: number;
+  tenorBulan: number;
+}
+
+export interface AgentIncentiveInput {
   agentId: string;
   agentName: string;
-  totalDisbursement: number;
-  baseSalary: number;
-  mainRate: number;
-  mainIncentive: number;
-  productivityBonus: number;
-  consistencyBonus: number;
-  totalCompensation: number;
+  deals: DisbursedDeal[];
+}
+
+export interface AgentIncentiveResult {
+  agentId: string;
+  agentName: string;
+  totalPencairan: number;
+  totalDailyKomisi: number;
+  monthlyBonus: number;
+  takeHome: number;
+  revenuePku: number;
+  netPku: number;
+  /** null berarti revenuePku = 0 -> tampilkan "—" di UI. */
+  marginPkuPct: number | null;
   tierLabel: string;
 }
 
-export function getMainRate(disbursement: number): { rate: number; label: string } {
-  if (disbursement > 500_000_000) return { rate: 0.025, label: ">Rp500jt (2.50%)" };
-  if (disbursement > 350_000_000)
-    return { rate: 0.0125, label: ">Rp350jt–Rp500jt (1.25%)" };
-  if (disbursement > 280_000_000)
-    return { rate: 0.0075, label: ">Rp280jt–Rp350jt (0.75%)" };
-  if (disbursement > 200_000_000)
-    return { rate: 0.005, label: ">Rp200jt–Rp280jt (0.50%)" };
-  if (disbursement >= 100_000_000)
-    return { rate: 0.0025, label: "Rp100jt–Rp200jt (0.25%)" };
-  return { rate: 0, label: "<Rp100jt (belum dapat insentif)" };
-}
-
-export function getProductivityBonus(disbursement: number): number {
-  if (disbursement > 500_000_000) return 3_000_000;
-  if (disbursement >= 350_000_000) return 1_500_000;
-  return 0;
-}
-
-export function getConsistencyBonus(avg3Months: number): number {
-  if (avg3Months > 250_000_000) return 1_000_000;
-  if (avg3Months >= 150_000_000) return 500_000;
-  return 0;
-}
-
 export function calculateAgentIncentive(
-  data: AgentMonthlyData,
-  baseSalary = BASE_SALARY
-): IncentiveResult {
-  const { rate, label } = getMainRate(data.totalDisbursement);
-  const mainIncentive = Math.round(data.totalDisbursement * rate);
-  const productivityBonus = getProductivityBonus(data.totalDisbursement);
-  const consistencyBonus = getConsistencyBonus(data.avg3MonthDisbursement);
+  input: AgentIncentiveInput,
+  activeAgentCount: number
+): AgentIncentiveResult {
+  const totalPencairan = input.deals.reduce((s, d) => s + d.nominalPencairan, 0);
+  const totalDailyKomisi = input.deals.reduce(
+    (s, d) => s + d.nominalPencairan * getDailyRate(d.tenorBulan),
+    0
+  );
+  const tier = getMonthlyBonusTier(totalPencairan);
+  const monthlyBonus = tier.bonus;
+  const takeHome = AGENT_BASE_SALARY + totalDailyKomisi + monthlyBonus;
+
+  const revenuePku = totalPencairan * PKU_COMMISSION_RATE;
+  const opexPerAgent =
+    AGENT_BASE_SALARY +
+    totalDailyKomisi +
+    monthlyBonus +
+    OPEX_NON_SALARY / Math.max(1, activeAgentCount);
+  const netPku = revenuePku - opexPerAgent;
+  const marginPkuPct = revenuePku === 0 ? null : (netPku / revenuePku) * 100;
 
   return {
-    agentId: data.agentId,
-    agentName: data.agentName,
-    totalDisbursement: data.totalDisbursement,
-    baseSalary,
-    mainRate: rate,
-    mainIncentive,
-    productivityBonus,
-    consistencyBonus,
-    totalCompensation:
-      baseSalary + mainIncentive + productivityBonus + consistencyBonus,
-    tierLabel: label,
+    agentId: input.agentId,
+    agentName: input.agentName,
+    totalPencairan,
+    totalDailyKomisi: Math.round(totalDailyKomisi),
+    monthlyBonus,
+    takeHome: Math.round(takeHome),
+    revenuePku: Math.round(revenuePku),
+    netPku: Math.round(netPku),
+    marginPkuPct,
+    tierLabel: tier.label,
   };
-}
-
-export function calculateTeamIncentives(
-  agents: AgentMonthlyData[]
-): IncentiveResult[] {
-  return agents.map((a) => calculateAgentIncentive(a));
-}
-
-/** Revenue agregator — only realized when application status is Disbursed. */
-export function calculatePkuRevenue(
-  disbursement: number,
-  commissionPercent = 5
-): number {
-  return Math.round(disbursement * (commissionPercent / 100));
 }

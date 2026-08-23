@@ -13,6 +13,7 @@ import { KpiCard } from "@/components/dashboard/kpi-card";
 import { FunnelChart } from "@/components/admin/funnel-chart";
 import { AgentPerformanceTable } from "@/components/admin/agent-performance-table";
 import { DateRangeFilter } from "@/components/admin/date-range-filter";
+import { IncentiveCalculator } from "@/components/admin/IncentiveCalculator";
 import { formatCompactRupiah, formatPercent } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminDashboardData } from "@/lib/admin-metrics";
@@ -27,6 +28,18 @@ export default async function AdminDashboardPage({
   const toParam = params.to;
   const from = typeof fromParam === "string" ? fromParam : startOfMonthWib(today);
   const to = typeof toParam === "string" ? toParam : today;
+
+  const [todayYear, todayMonth] = today.split("-").map(Number);
+  const incMonthParam = params.incMonth;
+  const incYearParam = params.incYear;
+  const incMonth =
+    typeof incMonthParam === "string" && Number(incMonthParam) >= 1 && Number(incMonthParam) <= 12
+      ? Number(incMonthParam)
+      : todayMonth!;
+  const incYear =
+    typeof incYearParam === "string" && Number.isInteger(Number(incYearParam))
+      ? Number(incYearParam)
+      : todayYear!;
 
   const supabase = await createClient();
   const { databaseTotal, kpi, funnel, agents } = await getAdminDashboardData(supabase, {
@@ -89,6 +102,8 @@ export default async function AdminDashboardPage({
       </div>
 
       <AgentPerformanceTable agents={agents} />
+
+      <IncentiveCalculator month={incMonth} year={incYear} />
     </div>
   );
 }

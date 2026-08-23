@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,9 +37,14 @@ function presetRange(key: (typeof PRESETS)[number]["key"]): { from: string; to: 
 export function DateRangeFilter({ from, to }: { from: string; to: string }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
+  // Merge, jangan replace - halaman ini juga punya filter periode Incentive
+  // Calculator (incMonth/incYear) yang harus tetap utuh di URL.
   function apply(next: { from: string; to: string }) {
-    const params = new URLSearchParams({ from: next.from, to: next.to });
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("from", next.from);
+    params.set("to", next.to);
     router.push(`${pathname}?${params.toString()}`);
   }
 
