@@ -63,6 +63,15 @@ export interface ActiveSlotsInfo {
   isFull: boolean;
 }
 
+/** Sembunyikan sebagian no HP di daftar - nomor penuh baru tampil di drawer Panggil. */
+function maskPhone(phone: string): string {
+  if (phone.length <= 7) return phone;
+  const prefix = phone.slice(0, 4);
+  const suffix = phone.slice(-3);
+  const dots = "•".repeat(phone.length - prefix.length - suffix.length);
+  return `${prefix}${dots}${suffix}`;
+}
+
 function capacityBarColor(activeCount: number, kapasitas: number): string {
   if (kapasitas <= 0) return "bg-muted-foreground";
   if (activeCount >= kapasitas * 0.8) return "bg-destructive";
@@ -290,8 +299,9 @@ export function QueueTable({
                         "text-xs text-muted-foreground",
                         invalid && "line-through"
                       )}
+                      title="Nomor lengkap tampil saat buka Panggil"
                     >
-                      {c.noHp}
+                      {maskPhone(c.noHp)}
                     </div>
                   </TableCell>
                   <TableCell>
