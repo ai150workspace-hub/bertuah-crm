@@ -30,20 +30,6 @@ export default async function AdminContactsPage({
 
   const supabase = await createClient();
 
-  const { data: agentRows } = await supabase
-    .from("users")
-    .select("id, name, kapasitas_data")
-    .eq("role", "agent")
-    .eq("is_active", true)
-    .order("name");
-  const agents = agentRows ?? [];
-  const agentNameMap = new Map(agents.map((a) => [a.id, a.name]));
-
-  // Kapasitas terpakai (active slots: Uncalled + In Progress + Warm) tiap
-  // agent - dipakai dropdown Assign. Invalid/Hot Lead/Closed tidak dihitung
-  // (lihat 0010_active_slot_capacity.sql). Satu query untuk semua agen.
-  const agentCapacities = await getAgentCapacitiesBulk(supabase, agents);
-
   let query = supabase
     .from("contacts")
     .select("id, nama, no_hp, jenis_kendaraan, status_call, assigned_to, updated_at", {
@@ -63,9 +49,47 @@ export default async function AdminContactsPage({
   }
 
   const from = (page - 1) * PAGE_SIZE;
-  const { data: contactRows, count: totalCount } = await query
-    .order("updated_at", { ascending: false })
-    .range(from, from + PAGE_SIZE - 1);
+  query = query.order("updated_at", { ascending: false }).range(from, from + PAGE_SIZE - 1);
+
+  // 5 query independen (tidak saling butuh hasil satu sama lain) - jalan
+  // bareng, bukan berurutan.
+  const [
+    { data: agentRows },
+    { data: contactRows, count: totalCount },
+    { count: totalAktif },
+    { count: unassignedCount },
+    { data: dncData, count: dncCount },
+  ] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, name, kapasitas_data")
+      .eq("role", "agent")
+      .eq("is_active", true)
+      .order("name"),
+    query,
+    supabase
+      .from("contacts")
+      .select("*", { count: "exact", head: true })
+      .not("status_call", "in", "(Invalid,Closed)"),
+    supabase
+      .from("contacts")
+      .select("*", { count: "exact", head: true })
+      .is("assigned_to", null)
+      .neq("status_call", "Invalid"),
+    supabase
+      .from("do_not_contact")
+      .select("no_hp, alasan, created_at", { count: "exact" })
+      .order("created_at", { ascending: false }),
+  ]);
+
+  const agents = agentRows ?? [];
+  const agentNameMap = new Map(agents.map((a) => [a.id, a.name]));
+
+  // Kapasitas terpakai (active slots: Uncalled + In Progress + Warm) tiap
+  // agent - dipakai dropdown Assign. Invalid/Hot Lead/Closed tidak dihitung
+  // (lihat 0010_active_slot_capacity.sql). Butuh daftar agent di atas dulu,
+  // jadi baru jalan setelah wave pertama selesai.
+  const agentCapacities = await getAgentCapacitiesBulk(supabase, agents);
 
   const rows: AdminContactRow[] = (contactRows ?? []).map((c) => ({
     id: c.id,
@@ -78,22 +102,6 @@ export default async function AdminContactsPage({
     updatedAt: c.updated_at,
   }));
 
-  const [{ count: totalAktif }, { count: unassignedCount }, { data: dncData, count: dncCount }] =
-    await Promise.all([
-      supabase
-        .from("contacts")
-        .select("*", { count: "exact", head: true })
-        .not("status_call", "in", "(Invalid,Closed)"),
-      supabase
-        .from("contacts")
-        .select("*", { count: "exact", head: true })
-        .is("assigned_to", null)
-        .neq("status_call", "Invalid"),
-      supabase
-        .from("do_not_contact")
-        .select("no_hp, alasan, created_at", { count: "exact" })
-        .order("created_at", { ascending: false }),
-    ]);
   const dncRows: DncRow[] = (dncData ?? []).map((d) => ({
     noHp: d.no_hp,
     alasan: d.alasan,

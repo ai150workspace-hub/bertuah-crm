@@ -68,34 +68,46 @@ export default async function AdminIncentivesPage({
 
   const supabase = await createClient();
 
-  const { data: agentRows } = await supabase
-    .from("users")
-    .select("id, name")
-    .eq("role", "agent")
-    .eq("is_active", true)
-    .order("name");
-  const agents = agentRows ?? [];
-
-  const { data: snapshotRows } = await supabase
-    .from("incentive_snapshots")
-    .select("*")
-    .eq("periode_bulan", month)
-    .eq("periode_tahun", year);
-  const snapshots = snapshotRows ?? [];
-  const snapshotByAgent = new Map(snapshots.map((s) => [s.agent_id, s]));
-  const isLocked = snapshots.length > 0;
-
   const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const nextMonth = month === 12 ? 1 : month + 1;
   const nextYear = month === 12 ? year + 1 : year;
   const monthEndExclusive = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
 
-  const { data: appRows } = await supabase
-    .from("applications")
-    .select("id, agent_id, nominal_pencairan, tenor_bulan, date_disbursed, contacts(nama)")
-    .eq("status_aplikasi", "Disbursed")
-    .gte("date_disbursed", monthStart)
-    .lt("date_disbursed", monthEndExclusive);
+  // 3 query independen (tidak saling butuh hasil satu sama lain) - jalan
+  // bareng, bukan berurutan, supaya waktu tunggu = query paling lambat,
+  // bukan jumlah semuanya.
+  const [{ data: agentRows }, { data: snapshotRows }, { data: appRows }, { data: historyRows }] =
+    await Promise.all([
+      supabase
+        .from("users")
+        .select("id, name")
+        .eq("role", "agent")
+        .eq("is_active", true)
+        .order("name"),
+      supabase
+        .from("incentive_snapshots")
+        .select("*")
+        .eq("periode_bulan", month)
+        .eq("periode_tahun", year),
+      supabase
+        .from("applications")
+        .select("id, agent_id, nominal_pencairan, tenor_bulan, date_disbursed, contacts(nama)")
+        .eq("status_aplikasi", "Disbursed")
+        .gte("date_disbursed", monthStart)
+        .lt("date_disbursed", monthEndExclusive),
+      // Riwayat 6 bulan terakhir (agregat semua agent per periode terkunci) -
+      // tidak bergantung ke 3 query di atas, jadi aman digabung satu wave.
+      supabase
+        .from("incentive_snapshots")
+        .select("periode_bulan, periode_tahun, take_home, net_pku")
+        .order("periode_tahun", { ascending: false })
+        .order("periode_bulan", { ascending: false })
+        .limit(500),
+    ]);
+  const agents = agentRows ?? [];
+  const snapshots = snapshotRows ?? [];
+  const snapshotByAgent = new Map(snapshots.map((s) => [s.agent_id, s]));
+  const isLocked = snapshots.length > 0;
   const deals = (appRows ?? []) as unknown as ApplicationDealRow[];
 
   const dealsByAgent = new Map<string, DealDetail[]>();
@@ -152,14 +164,6 @@ export default async function AdminIncentivesPage({
     }),
     { totalPencairan: 0, totalDailyKomisi: 0, monthlyBonus: 0, takeHome: 0, revenuePku: 0, netPku: 0 }
   );
-
-  // Riwayat 6 bulan terakhir (agregat semua agent per periode terkunci)
-  const { data: historyRows } = await supabase
-    .from("incentive_snapshots")
-    .select("periode_bulan, periode_tahun, take_home, net_pku")
-    .order("periode_tahun", { ascending: false })
-    .order("periode_bulan", { ascending: false })
-    .limit(500);
   const historyMap = new Map<string, HistoryPeriod>();
   for (const h of historyRows ?? []) {
     const key = `${h.periode_tahun}-${h.periode_bulan}`;

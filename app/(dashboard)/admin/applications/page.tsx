@@ -59,14 +59,6 @@ export default async function AdminApplicationsPage({
 
   const supabase = await createClient();
 
-  const { data: agentRows } = await supabase
-    .from("users")
-    .select("id, name")
-    .eq("role", "agent")
-    .eq("is_active", true)
-    .order("name");
-  const agents = agentRows ?? [];
-
   let query = supabase
     .from("applications")
     .select(
@@ -89,7 +81,17 @@ export default async function AdminApplicationsPage({
     query = query.eq("leasing_partner", leasing);
   }
 
-  const { data: appRows } = await query;
+  // 2 query independen - jalan bareng, bukan berurutan.
+  const [{ data: agentRows }, { data: appRows }] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, name")
+      .eq("role", "agent")
+      .eq("is_active", true)
+      .order("name"),
+    query,
+  ]);
+  const agents = agentRows ?? [];
   const apps = (appRows ?? []) as unknown as ApplicationDbRow[];
 
   const rows: AdminApplicationRow[] = apps.map((a) => ({
