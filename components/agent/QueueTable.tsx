@@ -89,12 +89,15 @@ export function QueueTable({
   activeSlots,
   agentStatus,
   compact = false,
+  totalCount,
 }: {
   contacts: Contact[];
   capabilities: ProviderCapabilities;
   activeSlots?: ActiveSlotsInfo | null;
   agentStatus?: "active" | "pause" | "inactive";
   compact?: boolean;
+  /** Total lead sesungguhnya - beda dari contacts.length kalau `contacts` cuma cuplikan (mis. preview di Dashboard). Default contacts.length. */
+  totalCount?: number;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -158,7 +161,7 @@ export function QueueTable({
         <div>
           <h3 className="font-semibold">Antrean Saya</h3>
           <p className="text-sm text-muted-foreground">
-            {contacts.length} lead dalam antrean kamu
+            {totalCount ?? contacts.length} lead dalam antrean kamu
           </p>
           {activeSlots && (
             <div className="mt-1.5 flex items-center gap-2">

@@ -20,6 +20,11 @@ export default async function AgentQueuePage() {
         .select(CONTACT_SELECT)
         .eq("assigned_to", profile.id)
         .order("created_at", { ascending: true })
+        // Safety cap - halaman ini sengaja fetch semua lead milik agent
+        // sekaligus (search/sort/filter di client butuh semuanya ter-load),
+        // tapi dibatasi biar tidak pernah fetch tanpa batas kalau kapasitas
+        // seorang agent suatu saat di-set sangat besar.
+        .limit(500)
     : { data: null };
 
   let contacts = ((contactRows ?? []) as ContactRow[]).map(mapDbContact);

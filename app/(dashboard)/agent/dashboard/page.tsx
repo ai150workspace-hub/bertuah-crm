@@ -22,22 +22,43 @@ import {
 } from "@/lib/contacts";
 import { getCapabilities } from "@/lib/telephony/provider";
 
+const DASHBOARD_PREVIEW_SIZE = 5;
+
 export default async function AgentDashboardPage() {
   const profile = await getCurrentUser();
   const supabase = await createClient();
   const firstName = profile?.name ? profile.name.split(" ")[0] : "";
 
-  const { data: contactRows } = profile
-    ? await supabase
-        .from("contacts")
-        .select(CONTACT_SELECT)
-        .eq("assigned_to", profile.id)
-        .order("created_at", { ascending: true })
-    : { data: null };
+  // Dashboard cuma butuh cuplikan kecil + 2 angka (total & hot leads), BUKAN
+  // seluruh antrean - itu tugas /agent/queue. Sebelumnya halaman ini fetch
+  // ulang SELURUH kontak agent + markPreviousCallFlags untuk semuanya cuma
+  // untuk ditampilkan sebagai preview, sama persis dengan /agent/queue -
+  // jadi 2x kerja berat untuk data yang sama. Di skala kapasitas besar
+  // (ratusan lead/agent) ini yang paling berat, jadi dipangkas jadi query
+  // ringan (count) + limit kecil untuk previewnya saja.
+  const [{ count: totalLeads }, { count: hotLeadsCount }, { data: previewRows }] = profile
+    ? await Promise.all([
+        supabase
+          .from("contacts")
+          .select("*", { count: "exact", head: true })
+          .eq("assigned_to", profile.id),
+        supabase
+          .from("contacts")
+          .select("*", { count: "exact", head: true })
+          .eq("assigned_to", profile.id)
+          .eq("status_call", "Hot Lead"),
+        supabase
+          .from("contacts")
+          .select(CONTACT_SELECT)
+          .eq("assigned_to", profile.id)
+          .order("created_at", { ascending: true })
+          .limit(DASHBOARD_PREVIEW_SIZE),
+      ])
+    : [{ count: 0 }, { count: 0 }, { data: null }];
 
-  let contacts = ((contactRows ?? []) as ContactRow[]).map(mapDbContact);
+  let contacts = ((previewRows ?? []) as ContactRow[]).map(mapDbContact);
   if (profile) contacts = await markPreviousCallFlags(contacts, profile.id);
-  const hotLeads = contacts.filter((c) => c.statusCall === "Hot Lead").length;
+  const hotLeads = hotLeadsCount ?? 0;
   const capabilities = await getCapabilities();
   const activeSlots = profile ? await getActiveSlots(supabase, profile.id) : null;
 
@@ -53,7 +74,7 @@ export default async function AgentDashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label="My Leads" value={String(contacts.length)} icon={Users} />
+        <KpiCard label="My Leads" value={String(totalLeads ?? 0)} icon={Users} />
         <KpiCard
           label="Today Calls"
           value={String(AGENT_KPI.todayCalls)}
@@ -89,6 +110,7 @@ export default async function AgentDashboardPage() {
         capabilities={capabilities}
         activeSlots={activeSlots}
         agentStatus={profile?.agentStatus ?? undefined}
+        totalCount={totalLeads ?? 0}
         compact
       />
     </div>
