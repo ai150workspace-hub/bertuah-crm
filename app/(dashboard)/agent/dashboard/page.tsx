@@ -12,6 +12,7 @@ import { QueueTable } from "@/components/agent/QueueTable";
 import { AGENT_KPI } from "@/lib/mock-data";
 import { formatCompactRupiah, formatPercent } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import {
   CONTACT_SELECT,
   mapDbContact,
@@ -22,28 +23,23 @@ import {
 import { getCapabilities } from "@/lib/telephony/provider";
 
 export default async function AgentDashboardPage() {
+  const profile = await getCurrentUser();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  const { data: profile } = user
-    ? await supabase.from("users").select("name, agent_status").eq("id", user.id).maybeSingle()
-    : { data: null };
   const firstName = profile?.name ? profile.name.split(" ")[0] : "";
 
-  const { data: contactRows } = user
+  const { data: contactRows } = profile
     ? await supabase
         .from("contacts")
         .select(CONTACT_SELECT)
-        .eq("assigned_to", user.id)
+        .eq("assigned_to", profile.id)
         .order("created_at", { ascending: true })
     : { data: null };
 
   let contacts = ((contactRows ?? []) as ContactRow[]).map(mapDbContact);
-  if (user) contacts = await markPreviousCallFlags(contacts, user.id);
+  if (profile) contacts = await markPreviousCallFlags(contacts, profile.id);
   const hotLeads = contacts.filter((c) => c.statusCall === "Hot Lead").length;
   const capabilities = await getCapabilities();
-  const activeSlots = user ? await getActiveSlots(supabase, user.id) : null;
+  const activeSlots = profile ? await getActiveSlots(supabase, profile.id) : null;
 
   return (
     <div className="space-y-6">
@@ -92,7 +88,7 @@ export default async function AgentDashboardPage() {
         contacts={contacts}
         capabilities={capabilities}
         activeSlots={activeSlots}
-        agentStatus={profile?.agent_status as "active" | "pause" | "inactive" | undefined}
+        agentStatus={profile?.agentStatus ?? undefined}
         compact
       />
     </div>

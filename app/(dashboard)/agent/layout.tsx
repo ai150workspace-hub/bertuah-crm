@@ -1,20 +1,10 @@
 import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import type { AppUser } from "@/types";
 
 export default async function AgentLayout({ children }: LayoutProps<"/agent">) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("id, name, email, role, is_active")
-    .eq("id", user.id)
-    .maybeSingle();
+  const profile = await getCurrentUser();
   if (!profile) redirect("/login");
 
   const appUser: AppUser = {
@@ -22,7 +12,7 @@ export default async function AgentLayout({ children }: LayoutProps<"/agent">) {
     name: profile.name,
     email: profile.email,
     role: profile.role,
-    active: profile.is_active,
+    active: profile.isActive,
   };
 
   return (

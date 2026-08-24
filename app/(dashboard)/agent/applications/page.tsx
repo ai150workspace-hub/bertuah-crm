@@ -3,6 +3,7 @@ import { KpiCard } from "@/components/dashboard/kpi-card";
 import { CreateApplicationDialog, type EligibleContact } from "@/components/agent/create-application-dialog";
 import { ApplicationsTable, type AgentApplicationRow } from "@/components/agent/applications-table";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import { formatCompactRupiah } from "@/lib/format";
 import type { ApplicationStatus } from "@/types";
 
@@ -26,26 +27,24 @@ function contactName(c: ApplicationDbRow["contacts"]): string {
 }
 
 export default async function AgentApplicationsPage() {
+  const profile = await getCurrentUser();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const [{ data: appRows }, { data: hotLeadRows }] = await Promise.all([
-    user
+    profile
       ? supabase
           .from("applications")
           .select(
             "id, contact_id, leasing_partner, nominal_pengajuan, nominal_pencairan, status_aplikasi, created_at, rejection_reason, contacts(nama)"
           )
-          .eq("agent_id", user.id)
+          .eq("agent_id", profile.id)
           .order("created_at", { ascending: false })
       : { data: null },
-    user
+    profile
       ? supabase
           .from("contacts")
           .select("id, nama, no_hp")
-          .eq("assigned_to", user.id)
+          .eq("assigned_to", profile.id)
           .eq("status_call", "Hot Lead")
           .order("nama")
       : { data: null },
