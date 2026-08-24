@@ -56,11 +56,16 @@ export default async function AgentDashboardPage() {
       ])
     : [{ count: 0 }, { count: 0 }, { data: null }];
 
-  let contacts = ((previewRows ?? []) as ContactRow[]).map(mapDbContact);
-  if (profile) contacts = await markPreviousCallFlags(contacts, profile.id);
+  const previewContacts = ((previewRows ?? []) as ContactRow[]).map(mapDbContact);
   const hotLeads = hotLeadsCount ?? 0;
-  const capabilities = await getCapabilities();
-  const activeSlots = profile ? await getActiveSlots(supabase, profile.id) : null;
+
+  // 3 operasi independen (tidak saling butuh hasil satu sama lain) - jalan
+  // bareng, bukan berurutan.
+  const [contacts, capabilities, activeSlots] = await Promise.all([
+    profile ? markPreviousCallFlags(previewContacts, profile.id) : Promise.resolve(previewContacts),
+    getCapabilities(),
+    profile ? getActiveSlots(supabase, profile.id) : Promise.resolve(null),
+  ]);
 
   return (
     <div className="space-y-6">

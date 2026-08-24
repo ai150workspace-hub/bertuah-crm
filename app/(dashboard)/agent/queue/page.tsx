@@ -27,10 +27,15 @@ export default async function AgentQueuePage() {
         .limit(500)
     : { data: null };
 
-  let contacts = ((contactRows ?? []) as ContactRow[]).map(mapDbContact);
-  if (profile) contacts = await markPreviousCallFlags(contacts, profile.id);
-  const capabilities = await getCapabilities();
-  const activeSlots = profile ? await getActiveSlots(supabase, profile.id) : null;
+  const rawContacts = ((contactRows ?? []) as ContactRow[]).map(mapDbContact);
+
+  // 3 operasi independen (tidak saling butuh hasil satu sama lain) - jalan
+  // bareng, bukan berurutan.
+  const [contacts, capabilities, activeSlots] = await Promise.all([
+    profile ? markPreviousCallFlags(rawContacts, profile.id) : Promise.resolve(rawContacts),
+    getCapabilities(),
+    profile ? getActiveSlots(supabase, profile.id) : Promise.resolve(null),
+  ]);
 
   return (
     <div className="space-y-6">
