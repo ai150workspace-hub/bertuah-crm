@@ -59,6 +59,48 @@ export async function getActiveSlots(
   };
 }
 
+export interface AgentCapacityInfo {
+  agentId: string;
+  agentName: string;
+  used: number;
+  capacity: number;
+}
+
+/**
+ * Kapasitas slot aktif (Uncalled + In Progress + Warm) untuk SEMUA agen
+ * sekaligus - satu query total, bukan satu query per agen (N+1).
+ * Dipakai bareng oleh admin/contacts/page.tsx dan app/actions/import.ts
+ * yang sebelumnya masing-masing punya implementasi N+1 sendiri.
+ */
+export async function getAgentCapacitiesBulk(
+  supabase: SupabaseClient,
+  agents: { id: string; name: string; kapasitas_data: number }[]
+): Promise<AgentCapacityInfo[]> {
+  if (agents.length === 0) return [];
+
+  const { data } = await supabase
+    .from("contacts")
+    .select("assigned_to")
+    .in(
+      "assigned_to",
+      agents.map((a) => a.id)
+    )
+    .in("status_call", ["Uncalled", "In Progress", "Warm"]);
+
+  const used = new Map<string, number>();
+  for (const row of data ?? []) {
+    const agentId = row.assigned_to as string;
+    used.set(agentId, (used.get(agentId) ?? 0) + 1);
+  }
+
+  return agents.map((a) => ({
+    agentId: a.id,
+    agentName: a.name,
+    used: used.get(a.id) ?? 0,
+    capacity: a.kapasitas_data,
+  }));
+}
+
 /**
  * Tandai kontak yang pernah dihubungi agen LAIN (recycled dari Warm/In
  * Progress) - satu query untuk semua kontak, bukan per-kontak.

@@ -74,7 +74,10 @@ export default async function AdminApplicationsPage({
     )
     .gte("created_at", wibDayStartIso(from))
     .lte("created_at", wibDayEndIso(to))
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    // Safety cap - halaman ini belum punya paginasi, batasi biar tidak
+    // fetch tak terbatas kalau ada yang pilih rentang tanggal sangat lebar.
+    .limit(1000);
 
   if (statuses.length > 0 && statuses.length < ALL_STATUSES.length) {
     query = query.in("status_aplikasi", statuses);

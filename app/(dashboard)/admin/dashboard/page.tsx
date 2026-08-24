@@ -9,8 +9,9 @@ import {
   CircleCheck,
   Banknote,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { KpiCard } from "@/components/dashboard/kpi-card";
-import { FunnelChart } from "@/components/admin/funnel-chart";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AgentPerformanceTable } from "@/components/admin/agent-performance-table";
 import { DateRangeFilter } from "@/components/admin/date-range-filter";
 import { IncentiveCalculator } from "@/components/admin/IncentiveCalculator";
@@ -18,6 +19,13 @@ import { formatCompactRupiah, formatPercent } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminDashboardData } from "@/lib/admin-metrics";
 import { todayWib, startOfMonthWib } from "@/lib/wib-date";
+
+// recharts cukup besar - dipisah jadi chunk sendiri, bukan ikut bundle
+// awal halaman dashboard.
+const FunnelChart = dynamic(
+  () => import("@/components/admin/funnel-chart").then((m) => m.FunnelChart),
+  { loading: () => <Skeleton className="h-72 rounded-lg" /> }
+);
 
 export default async function AdminDashboardPage({
   searchParams,

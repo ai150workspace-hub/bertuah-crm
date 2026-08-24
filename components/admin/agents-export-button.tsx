@@ -1,6 +1,5 @@
 "use client";
 
-import * as XLSX from "xlsx";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AgentReportRow } from "@/components/admin/agents-report-table";
@@ -25,7 +24,10 @@ export function AgentsExportButton({
   health: DatabaseHealthData;
   periodeTo: string;
 }) {
-  function handleExport() {
+  async function handleExport() {
+    // Import baru diambil saat tombol diklik, bukan ikut bundle awal
+    // halaman - xlsx (SheetJS) library-nya cukup besar.
+    const XLSX = await import("xlsx");
     const ringkasan = rows.map((r) => ({
       Agen: r.agentName,
       "Data Di-assign": r.dataDiAssign,

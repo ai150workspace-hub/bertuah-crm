@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { normalizePhoneLocal } from "@/lib/import/phone-local";
 import { distributeAutoRoundRobin, type AgentCapacity } from "@/lib/import/distribute";
+import { getAgentCapacitiesBulk } from "@/lib/contacts";
 
 export interface RawImportRow {
   nama: string;
@@ -153,25 +154,10 @@ export async function getAgentCapacities(): Promise<AgentCapacityInfo[]> {
     .eq("is_active", true)
     .order("name");
 
-  const agents = agentRows ?? [];
-  const results = await Promise.all(
-    agents.map(async (a) => {
-      // Active slots (Uncalled + In Progress + Warm) - Invalid/Hot Lead/
-      // Closed tidak dihitung. Lihat 0010_active_slot_capacity.sql.
-      const { count } = await supabase
-        .from("contacts")
-        .select("*", { count: "exact", head: true })
-        .eq("assigned_to", a.id)
-        .in("status_call", ["Uncalled", "In Progress", "Warm"]);
-      return {
-        agentId: a.id as string,
-        agentName: a.name as string,
-        used: count ?? 0,
-        capacity: a.kapasitas_data as number,
-      };
-    })
-  );
-  return results;
+  // Active slots (Uncalled + In Progress + Warm) - Invalid/Hot Lead/Closed
+  // tidak dihitung. Lihat 0010_active_slot_capacity.sql. Satu query untuk
+  // semua agen (bukan satu query per agen).
+  return getAgentCapacitiesBulk(supabase, agentRows ?? []);
 }
 
 export async function updateAgentCapacity(

@@ -90,11 +90,14 @@ export default async function AdminAgentsPage({
       .select("agent_id, level_1, hasil, timestamp")
       .gte("timestamp", startIso)
       .lte("timestamp", endIso),
+    // Cukup untuk "last activity" + 5 call log terakhir tiap agen di skala
+    // tim sekarang (lihat catatan di getActiveSlots-style query lain) -
+    // diturunkan dari 1500 supaya payload lebih kecil setiap kunjungan.
     supabase
       .from("call_logs")
       .select("agent_id, timestamp, hasil, call_duration, contacts(nama)")
       .order("timestamp", { ascending: false })
-      .limit(1500),
+      .limit(500),
     supabase
       .from("applications")
       .select("agent_id, status_aplikasi, nominal_pencairan, created_at, date_disbursed"),

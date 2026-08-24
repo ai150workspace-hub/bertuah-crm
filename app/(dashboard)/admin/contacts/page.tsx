@@ -5,6 +5,7 @@ import { ContactsTable, type AdminContactRow } from "@/components/admin/contacts
 import { ContactsPagination } from "@/components/admin/contacts/contacts-pagination";
 import { DncSheetTrigger, type DncRow } from "@/components/admin/contacts/dnc-sheet";
 import { createClient } from "@/lib/supabase/server";
+import { getAgentCapacitiesBulk } from "@/lib/contacts";
 
 const PAGE_SIZE = 50;
 const DEFAULT_STATUSES = ["Uncalled", "Hot Lead", "Warm", "In Progress"];
@@ -40,17 +41,8 @@ export default async function AdminContactsPage({
 
   // Kapasitas terpakai (active slots: Uncalled + In Progress + Warm) tiap
   // agent - dipakai dropdown Assign. Invalid/Hot Lead/Closed tidak dihitung
-  // (lihat 0010_active_slot_capacity.sql).
-  const agentCapacities = await Promise.all(
-    agents.map(async (a) => {
-      const { count } = await supabase
-        .from("contacts")
-        .select("*", { count: "exact", head: true })
-        .eq("assigned_to", a.id)
-        .in("status_call", ["Uncalled", "In Progress", "Warm"]);
-      return { agentId: a.id, agentName: a.name, used: count ?? 0, capacity: a.kapasitas_data };
-    })
-  );
+  // (lihat 0010_active_slot_capacity.sql). Satu query untuk semua agen.
+  const agentCapacities = await getAgentCapacitiesBulk(supabase, agents);
 
   let query = supabase
     .from("contacts")

@@ -3,7 +3,6 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
-import * as XLSX from "xlsx";
 import {
   UploadCloud,
   FileDown,
@@ -106,6 +105,9 @@ async function parseFile(file: File): Promise<RawImportRow[]> {
     });
   }
 
+  // File .xlsx saja yang butuh SheetJS - CSV (jalur di atas) tidak perlu
+  // library ini sama sekali, jadi baru diambil kalau memang dipakai.
+  const XLSX = await import("xlsx");
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
   const sheet = wb.Sheets[wb.SheetNames[0]!];
