@@ -9,8 +9,7 @@ import {
 } from "lucide-react";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { QueueTable } from "@/components/agent/QueueTable";
-import { AGENT_KPI } from "@/lib/mock-data";
-import { formatCompactRupiah, formatPercent } from "@/lib/format";
+import { formatRupiah, formatPercent } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import {
@@ -21,6 +20,10 @@ import {
   type ContactRow,
 } from "@/lib/contacts";
 import { getCapabilities } from "@/lib/telephony/provider";
+import { adalahRpc } from "@/lib/call-outcome/derive";
+import type { KodeHasil } from "@/lib/call-outcome/catalog";
+import { calculateAgentIncentive, type DisbursedDeal } from "@/lib/incentive-calculator";
+import { todayWib, startOfMonthWib, wibDayStartIso, wibDayEndIso } from "@/lib/wib-date";
 
 const DASHBOARD_PREVIEW_SIZE = 5;
 
@@ -29,14 +32,27 @@ export default async function AgentDashboardPage() {
   const supabase = await createClient();
   const firstName = profile?.name ? profile.name.split(" ")[0] : "";
 
-  // Dashboard cuma butuh cuplikan kecil + 2 angka (total & hot leads), BUKAN
-  // seluruh antrean - itu tugas /agent/queue. Sebelumnya halaman ini fetch
-  // ulang SELURUH kontak agent + markPreviousCallFlags untuk semuanya cuma
-  // untuk ditampilkan sebagai preview, sama persis dengan /agent/queue -
-  // jadi 2x kerja berat untuk data yang sama. Di skala kapasitas besar
-  // (ratusan lead/agent) ini yang paling berat, jadi dipangkas jadi query
-  // ringan (count) + limit kecil untuk previewnya saja.
-  const [{ count: totalLeads }, { count: hotLeadsCount }, { data: previewRows }] = profile
+  const today = todayWib();
+  const todayStartIso = wibDayStartIso(today);
+  const todayEndIso = wibDayEndIso(today);
+  const monthStart = startOfMonthWib(today);
+  const [monthStartYear, monthStartMonth] = monthStart.split("-").map(Number);
+  const nextMonth = monthStartMonth === 12 ? 1 : monthStartMonth! + 1;
+  const nextYear = monthStartMonth === 12 ? monthStartYear! + 1 : monthStartYear;
+  const monthEndExclusive = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
+
+  // Dashboard cuma butuh cuplikan kecil + angka ringkasan, BUKAN seluruh
+  // antrean - itu tugas /agent/queue. 7 query independen (tidak saling
+  // butuh hasil satu sama lain) jalan bareng, bukan berurutan.
+  const [
+    { count: totalLeads },
+    { count: hotLeadsCount },
+    { data: previewRows },
+    { data: callLogsToday },
+    { count: readyToSurveyCount },
+    { data: disbursedThisMonth },
+    { count: activeAgentCount },
+  ] = profile
     ? await Promise.all([
         supabase
           .from("contacts")
@@ -53,11 +69,72 @@ export default async function AgentDashboardPage() {
           .eq("assigned_to", profile.id)
           .order("created_at", { ascending: true })
           .limit(DASHBOARD_PREVIEW_SIZE),
+        // Today Calls + Contact Rate - 1 query, dipecah jadi 2 angka di JS.
+        supabase
+          .from("call_logs")
+          .select("hasil")
+          .eq("agent_id", profile.id)
+          .gte("timestamp", todayStartIso)
+          .lte("timestamp", todayEndIso),
+        supabase
+          .from("applications")
+          .select("*", { count: "exact", head: true })
+          .eq("agent_id", profile.id)
+          .eq("status_aplikasi", "Survey"),
+        // Pencairan Bulan Ini + Estimasi Insentif - 1 query, dipakai dua-duanya.
+        supabase
+          .from("applications")
+          .select("nominal_pencairan, tenor_bulan")
+          .eq("agent_id", profile.id)
+          .eq("status_aplikasi", "Disbursed")
+          .gte("date_disbursed", monthStart)
+          .lt("date_disbursed", monthEndExclusive),
+        supabase
+          .from("users")
+          .select("*", { count: "exact", head: true })
+          .eq("role", "agent")
+          .eq("is_active", true),
       ])
-    : [{ count: 0 }, { count: 0 }, { data: null }];
+    : [
+        { count: 0 },
+        { count: 0 },
+        { data: null },
+        { data: null },
+        { count: 0 },
+        { data: null },
+        { count: 0 },
+      ];
 
   const previewContacts = ((previewRows ?? []) as ContactRow[]).map(mapDbContact);
   const hotLeads = hotLeadsCount ?? 0;
+
+  const callsToday = callLogsToday ?? [];
+  const totalCallsToday = callsToday.length;
+  // "Connected" dihitung via adalahRpc(hasil), bukan level_1='CONNECTED' mentah -
+  // level_1 lama menghitung busy tone/mailbox sebagai "tersambung". Disamakan
+  // dengan definisi yang sudah dipakai di /admin/dashboard dan /admin/agents.
+  const connectedToday = callsToday.filter(
+    (l) => l.hasil && adalahRpc(l.hasil as KodeHasil)
+  ).length;
+  const contactRateLabel =
+    totalCallsToday > 0 ? formatPercent((connectedToday / totalCallsToday) * 100) : "—";
+
+  // Estimasi Insentif - pakai calculateAgentIncentive() yang sudah ada
+  // (lib/incentive-calculator.ts), sama persis seperti dipakai /admin/incentives.
+  // Deal individual bulan berjalan dipakai juga untuk Pencairan Bulan Ini,
+  // supaya tidak query dua kali ke tabel yang sama.
+  const deals: DisbursedDeal[] = (disbursedThisMonth ?? []).map((d) => ({
+    nominalPencairan: d.nominal_pencairan ?? 0,
+    tenorBulan: d.tenor_bulan ?? 12,
+  }));
+  const monthlyDisbursement = deals.reduce((sum, d) => sum + d.nominalPencairan, 0);
+  const incentive =
+    profile && profile.name
+      ? calculateAgentIncentive(
+          { agentId: profile.id, agentName: profile.name, deals },
+          activeAgentCount ?? 1
+        )
+      : null;
 
   // 3 operasi independen (tidak saling butuh hasil satu sama lain) - jalan
   // bareng, bukan berurutan.
@@ -80,31 +157,23 @@ export default async function AgentDashboardPage() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard label="My Leads" value={String(totalLeads ?? 0)} icon={Users} />
-        <KpiCard
-          label="Today Calls"
-          value={String(AGENT_KPI.todayCalls)}
-          icon={PhoneCall}
-        />
-        <KpiCard
-          label="Contact Rate"
-          value={formatPercent(AGENT_KPI.contactRate)}
-          icon={TrendingUp}
-        />
+        <KpiCard label="Today Calls" value={String(totalCallsToday)} icon={PhoneCall} />
+        <KpiCard label="Contact Rate" value={contactRateLabel} icon={TrendingUp} />
         <KpiCard label="Hot Leads" value={String(hotLeads)} icon={Flame} tone="hot" />
         <KpiCard
           label="Ready to Survey"
-          value={String(AGENT_KPI.readyToSurvey)}
+          value={String(readyToSurveyCount ?? 0)}
           icon={CalendarCheck}
         />
         <KpiCard
           label="Pencairan Bulan Ini"
-          value={formatCompactRupiah(AGENT_KPI.monthlyDisbursement)}
+          value={formatRupiah(monthlyDisbursement)}
           icon={Banknote}
           tone="success"
         />
         <KpiCard
           label="Estimasi Insentif"
-          value={formatCompactRupiah(AGENT_KPI.estimatedIncentive)}
+          value={formatRupiah(incentive?.takeHome ?? 0)}
           icon={Wallet}
           tone="success"
         />
