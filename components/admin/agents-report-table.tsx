@@ -125,7 +125,7 @@ function formatDuration(sec: number | null): string {
   return m > 0 ? `${m}m ${s}d` : `${s}d`;
 }
 
-function MiniFunnel({ stages }: { stages: AgentFunnelStage[] }) {
+export function MiniFunnel({ stages }: { stages: AgentFunnelStage[] }) {
   const max = Math.max(1, ...stages.map((s) => s.value));
   return (
     <div className="space-y-1.5">
@@ -145,7 +145,7 @@ function MiniFunnel({ stages }: { stages: AgentFunnelStage[] }) {
   );
 }
 
-function CallDistributionBar({ dist }: { dist: AgentCallDistribution }) {
+export function CallDistributionBar({ dist }: { dist: AgentCallDistribution }) {
   const total = dist.connected + dist.unconnected;
   const connectedPct = total > 0 ? (dist.connected / total) * 100 : 0;
   const subTotal = Math.max(1, dist.hotLead + dist.warm + dist.inProgress + dist.closed);

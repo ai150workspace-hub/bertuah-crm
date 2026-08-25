@@ -23,12 +23,7 @@ export const AGENT_NAV: NavItem[] = [
   { label: "Dashboard", href: "/agent/dashboard", icon: LayoutDashboard },
   { label: "Antrean Saya", href: "/agent/queue", icon: Users },
   { label: "Aplikasi Saya", href: "/agent/applications", icon: FileStack },
-  {
-    label: "Performa Saya",
-    href: "/agent/performance",
-    icon: BarChart3,
-    comingSoon: true,
-  },
+  { label: "Performa Saya", href: "/agent/performance", icon: BarChart3 },
 ];
 
 export const ADMIN_NAV: NavItem[] = [
