@@ -106,10 +106,13 @@ function utilisasiColor(pct: number | null): string {
   return "text-destructive font-medium";
 }
 
+// Standar KPI resmi: target Contacted 15/hari dari 150 unique customer
+// worked/hari = 10% Contact Rate. Ambang lama (>30% hijau, >=15% kuning)
+// dari asumsi awal yang tidak sesuai realita cold-call database asuransi.
 function contactRateColor(pct: number | null): string {
   if (pct === null) return "text-muted-foreground";
-  if (pct > 30) return "text-success font-medium";
-  if (pct >= 15) return "text-warning-foreground font-medium";
+  if (pct >= 10) return "text-success font-medium";
+  if (pct >= 6) return "text-warning-foreground font-medium";
   return "text-destructive font-medium";
 }
 
