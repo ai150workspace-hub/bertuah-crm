@@ -13,6 +13,7 @@ import {
 import type { AgentStatus, HeldContact, OtherAgentOption } from "@/components/admin/AgentStatusControls";
 import { DatabaseHealthCard, type DatabaseHealthData } from "@/components/admin/database-health-card";
 import { AgentsExportButton } from "@/components/admin/agents-export-button";
+import { CreateAgentDialog } from "@/components/admin/CreateAgentDialog";
 import { createClient } from "@/lib/supabase/server";
 import { formatPercent } from "@/lib/format";
 import { wibDayStartIso, wibDayEndIso, todayWib, startOfMonthWib } from "@/lib/wib-date";
@@ -370,7 +371,10 @@ export default async function AdminAgentsPage({
 
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">Performa per Agen</h2>
-        <AgentsExportButton rows={rows} health={health} periodeTo={to} />
+        <div className="flex items-center gap-2">
+          <CreateAgentDialog />
+          <AgentsExportButton rows={rows} health={health} periodeTo={to} />
+        </div>
       </div>
 
       <AgentsReportTable rows={rowsWithStatus} />
