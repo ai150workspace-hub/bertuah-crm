@@ -33,6 +33,8 @@ import type { ProviderCapabilities } from "@/lib/telephony/types";
 import { todayWib, wibDateFromIso, formatDateID } from "@/lib/wib-date";
 
 const FULL_PAGE_SIZE = 25;
+const DEFAULT_CLAIM_BATCH_SIZE = 50;
+const MAX_CLAIM_BATCH_SIZE = 50;
 const FILTERABLE_STATUSES: StatusCall[] = ["Uncalled", "In Progress", "Warm", "Hot Lead"];
 type SortKey = "updated" | "nama" | "status" | "followup";
 
@@ -107,6 +109,8 @@ export function QueueTable({
   const [selected, setSelected] = useState<Contact | null>(null);
   const [open, setOpen] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [batchSize, setBatchSize] = useState(DEFAULT_CLAIM_BATCH_SIZE);
+  const [lastClaimResult, setLastClaimResult] = useState<string | null>(null);
 
   let filtered = contacts.filter((c) =>
     `${c.nama} ${c.noHp}`.toLowerCase().includes(search.toLowerCase())
@@ -140,18 +144,25 @@ export function QueueTable({
 
   async function handleClaim() {
     setClaiming(true);
-    const result = await claimLeads();
+    const result = await claimLeads(batchSize);
     setClaiming(false);
 
     if (!result.success) {
       toast.error("Gagal mengambil data baru.", { description: result.error });
+      setLastClaimResult(null);
       return;
     }
     if (!result.claimed) {
       toast.info("Tidak ada lead baru yang tersedia di pool saat ini.");
+      setLastClaimResult(null);
       return;
     }
     toast.success(`${result.claimed} lead baru diambil.`);
+    // Breakdown per kategori (recycled warm/in-progress/fresh) belum
+    // tersedia dari RPC - assign_contacts_to_agent cuma return total
+    // assigned_count, bukan rincian per prioritas. Kalau nanti perlu
+    // rincian granular, RPC-nya perlu ditambah kolom return.
+    setLastClaimResult(`Dapat: ${result.claimed} kontak baru.`);
     router.refresh();
   }
 
@@ -183,7 +194,7 @@ export function QueueTable({
           )}
           {activeSlots && (
             <p className="text-[11px] text-muted-foreground/70">
-              Warm &amp; In Progress dihitung · Invalid &amp; Hot Lead tidak
+              Uncalled + In Progress + Warm dihitung · Invalid &amp; Hot Lead tidak
             </p>
           )}
         </div>
@@ -239,6 +250,21 @@ export function QueueTable({
             </>
           )}
 
+          <Input
+            type="number"
+            min={1}
+            max={MAX_CLAIM_BATCH_SIZE}
+            value={batchSize}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n)) {
+                setBatchSize(Math.min(MAX_CLAIM_BATCH_SIZE, Math.max(1, n)));
+              }
+            }}
+            className="w-16"
+            title="Jumlah data yang diambil per klik (maks 50)"
+            aria-label="Jumlah data yang diambil"
+          />
           <span
             title={
               agentStatus === "pause"
@@ -258,6 +284,10 @@ export function QueueTable({
           </span>
         </div>
       </div>
+
+      {lastClaimResult && (
+        <p className="text-xs text-muted-foreground">{lastClaimResult}</p>
+      )}
 
       <div className="rounded-lg border overflow-x-auto">
         <Table>

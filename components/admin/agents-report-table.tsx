@@ -79,7 +79,13 @@ export interface AgentReportRow {
   pauseMaxDays: number;
   heldContacts: HeldContact[];
   otherAgents: OtherAgentOption[];
+  // Cap recycled harian (lihat 0014_capacity_recycled_cap.sql)
+  recycledWarmToday: number;
+  recycledInprogToday: number;
 }
+
+const RECYCLED_WARM_DAILY_CAP = 30;
+const RECYCLED_INPROG_DAILY_CAP = 40;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -266,6 +272,10 @@ function AgentRow({ row }: { row: AgentReportRow }) {
                   Funnel Pipeline
                 </div>
                 <MiniFunnel stages={row.funnel} />
+                <div className="mt-3 text-[11px] text-muted-foreground">
+                  Recycled hari ini: {row.recycledWarmToday}/{RECYCLED_WARM_DAILY_CAP} Warm,{" "}
+                  {row.recycledInprogToday}/{RECYCLED_INPROG_DAILY_CAP} In Progress
+                </div>
               </div>
               <div>
                 <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">

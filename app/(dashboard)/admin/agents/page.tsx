@@ -81,7 +81,9 @@ export default async function AdminAgentsPage({
   ] = await Promise.all([
     supabase
       .from("users")
-      .select("id, name, kapasitas_data, agent_status, pause_started_at, pause_max_days")
+      .select(
+        "id, name, kapasitas_data, agent_status, pause_started_at, pause_max_days, recycled_warm_taken_today, recycled_inprogress_taken_today, recycled_counter_date"
+      )
       .eq("role", "agent")
       .order("name"),
     supabase.from("contacts").select("id, nama, no_hp, assigned_to, status_call"),
@@ -245,6 +247,15 @@ export default async function AdminAgentsPage({
       { label: "Disbursed", value: appsAgent.disbursed },
     ];
 
+    // Counter recycled harian baru di-reset di database saat agent benar-
+    // benar klik "Ambil Data Baru" di hari itu (atau lewat cron backup
+    // tengah malam) - lihat 0014_capacity_recycled_cap.sql. Kalau belum
+    // ke-reset (recycled_counter_date bukan hari ini), tampilkan 0 di sini
+    // supaya admin tidak lihat sisa angka kemarin sebelum sempat direset.
+    const recycledIsToday = agent.recycled_counter_date === today;
+    const recycledWarmToday = recycledIsToday ? (agent.recycled_warm_taken_today ?? 0) : 0;
+    const recycledInprogToday = recycledIsToday ? (agent.recycled_inprogress_taken_today ?? 0) : 0;
+
     return {
       agentId: agent.id,
       agentName: agent.name,
@@ -272,6 +283,8 @@ export default async function AdminAgentsPage({
       agentStatus: agent.agent_status as AgentStatus,
       pauseStartedAt: agent.pause_started_at,
       pauseMaxDays: agent.pause_max_days,
+      recycledWarmToday,
+      recycledInprogToday,
       heldContacts: [],
       otherAgents: [],
     };
