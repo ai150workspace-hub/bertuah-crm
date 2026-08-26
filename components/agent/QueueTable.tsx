@@ -29,6 +29,7 @@ import type { Contact, StatusCall } from "@/types";
 import { STATUS_CALL_COLORS } from "@/lib/status-colors";
 import { claimLeads } from "@/app/actions/leads";
 import { CustomerDrawer } from "./customer-drawer";
+import type { ScriptContentRow } from "@/lib/scripts";
 import type { ProviderCapabilities } from "@/lib/telephony/types";
 import { todayWib, wibDateFromIso, formatDateID } from "@/lib/wib-date";
 
@@ -92,6 +93,10 @@ export function QueueTable({
   agentStatus,
   compact = false,
   totalCount,
+  scripts,
+  agentId,
+  agentCreatedAt,
+  initialFollowupTemplate,
 }: {
   contacts: Contact[];
   capabilities: ProviderCapabilities;
@@ -100,6 +105,11 @@ export function QueueTable({
   compact?: boolean;
   /** Total lead sesungguhnya - beda dari contacts.length kalau `contacts` cuma cuplikan (mis. preview di Dashboard). Default contacts.length. */
   totalCount?: number;
+  /** Diteruskan ke CustomerDrawer untuk panel panduan script - lihat components/agent/ScriptSidebar.tsx. */
+  scripts?: ScriptContentRow[];
+  agentId?: string;
+  agentCreatedAt?: string;
+  initialFollowupTemplate?: string | null;
 }) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -429,6 +439,10 @@ export function QueueTable({
         open={open}
         onOpenChange={setOpen}
         capabilities={capabilities}
+        scripts={scripts}
+        agentId={agentId}
+        agentCreatedAt={agentCreatedAt}
+        initialFollowupTemplate={initialFollowupTemplate}
       />
     </div>
   );

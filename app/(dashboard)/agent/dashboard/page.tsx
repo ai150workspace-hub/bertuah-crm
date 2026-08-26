@@ -24,6 +24,8 @@ import { adalahRpc } from "@/lib/call-outcome/derive";
 import type { KodeHasil } from "@/lib/call-outcome/catalog";
 import { calculateAgentIncentive, type DisbursedDeal } from "@/lib/incentive-calculator";
 import { todayWib, startOfMonthWib, wibDayStartIso, wibDayEndIso } from "@/lib/wib-date";
+import { getActiveScriptContent } from "@/lib/scripts";
+import { getWaTemplate } from "@/lib/wa-templates";
 
 const DASHBOARD_PREVIEW_SIZE = 5;
 
@@ -136,12 +138,14 @@ export default async function AgentDashboardPage() {
         )
       : null;
 
-  // 3 operasi independen (tidak saling butuh hasil satu sama lain) - jalan
+  // 5 operasi independen (tidak saling butuh hasil satu sama lain) - jalan
   // bareng, bukan berurutan.
-  const [contacts, capabilities, activeSlots] = await Promise.all([
+  const [contacts, capabilities, activeSlots, scripts, initialFollowupTemplate] = await Promise.all([
     profile ? markPreviousCallFlags(previewContacts, profile.id) : Promise.resolve(previewContacts),
     getCapabilities(),
     profile ? getActiveSlots(supabase, profile.id) : Promise.resolve(null),
+    getActiveScriptContent(),
+    getWaTemplate("initial_followup"),
   ]);
 
   return (
@@ -185,6 +189,10 @@ export default async function AgentDashboardPage() {
         activeSlots={activeSlots}
         agentStatus={profile?.agentStatus ?? undefined}
         totalCount={totalLeads ?? 0}
+        scripts={scripts}
+        agentId={profile?.id}
+        agentCreatedAt={profile?.createdAt}
+        initialFollowupTemplate={initialFollowupTemplate?.templateText ?? null}
         compact
       />
     </div>

@@ -39,17 +39,33 @@ import { infoHasil, validasiHasil } from "@/lib/call-outcome/derive";
 import { saveCallLog, getPreviousCallHistory, type PreviousCallHistoryEntry } from "@/app/actions/call-log";
 import { telUri, normalisasiNomor } from "@/lib/telephony/phone";
 import type { ProviderCapabilities } from "@/lib/telephony/types";
+import { ScriptSidebar } from "./ScriptSidebar";
+import type { ScriptContentRow } from "@/lib/scripts";
+import { fillWaPlaceholders, type ScriptPlaceholderData } from "@/lib/script-placeholder";
+import { cn } from "@/lib/utils";
+
+const RUPIAH_PLAIN = new Intl.NumberFormat("id-ID");
 
 export function CustomerDrawer({
   contact,
   open,
   onOpenChange,
   capabilities,
+  scripts,
+  agentId,
+  agentCreatedAt,
+  initialFollowupTemplate,
 }: {
   contact: Contact | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   capabilities: ProviderCapabilities;
+  /** Konten panduan script - kalau tidak dikirim, sidebar panduan tidak ditampilkan. */
+  scripts?: ScriptContentRow[];
+  agentId?: string;
+  agentCreatedAt?: string;
+  /** Teks mentah template WA "initial_followup" (belum diisi placeholder) - lihat lib/wa-templates.ts. */
+  initialFollowupTemplate?: string | null;
 }) {
   const router = useRouter();
   const [kode, setKode] = useState<KodeHasil | "">("");
@@ -57,6 +73,7 @@ export function CustomerDrawer({
   const [tanggalFollowup, setTanggalFollowup] = useState("");
   const [simulasiNominal, setSimulasiNominal] = useState("");
   const [simulasiTenor, setSimulasiTenor] = useState("");
+  const [simulasiAngsuran, setSimulasiAngsuran] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [history, setHistory] = useState<PreviousCallHistoryEntry[]>([]);
@@ -80,6 +97,7 @@ export function CustomerDrawer({
     setTanggalFollowup("");
     setSimulasiNominal("");
     setSimulasiTenor("");
+    setSimulasiAngsuran("");
     setNotes("");
     setHistory([]);
   }
@@ -116,6 +134,7 @@ export function CustomerDrawer({
       tanggalFollowup: tanggalFollowup || null,
       simulasiNominal: simulasiNominal ? Number(simulasiNominal) : null,
       simulasiTenor: simulasiTenor ? Number(simulasiTenor) : null,
+      simulasiAngsuran: simulasiAngsuran ? Number(simulasiAngsuran) : null,
       notes: notes || null,
     });
     setSaving(false);
@@ -134,15 +153,35 @@ export function CustomerDrawer({
   }
 
   const phoneE164 = normalisasiNomor(contact.noHp);
-  const waMessage = encodeURIComponent(
-    `Assalamu'alaikum Bapak/Ibu ${contact.nama} 🙏\n\nSaya dari *Bertuah CRM* — solusi dana tunai jaminan BPKB kendaraan di Pekanbaru.\n\nBoleh saya bantu hitungkan simulasi untuk ${contact.jenisKendaraan.toLowerCase()} ${contact.merkTipe} (${contact.tahun}) milik Bapak/Ibu?\n\nTerima kasih 🙏`
-  );
+
+  const kendaraanText = [contact.jenisKendaraan, contact.merkTipe].filter(Boolean).join(" ");
+  const placeholderData: ScriptPlaceholderData = {
+    nama: contact.nama,
+    kendaraan: kendaraanText,
+    tahun: contact.tahun,
+    merk: contact.merkTipe || "",
+    jumlah: simulasiNominal ? RUPIAH_PLAIN.format(Number(simulasiNominal)) : undefined,
+    cicilan: simulasiAngsuran ? RUPIAH_PLAIN.format(Number(simulasiAngsuran)) : undefined,
+    tenor: simulasiTenor ? Number(simulasiTenor) : undefined,
+  };
+
+  // Simulasi (nominal + tenor) sudah diisi -> pakai template "initial_followup"
+  // dari database (lihat lib/wa-templates.ts). Belum diisi -> tetap pakai
+  // pembuka generik seperti sebelumnya, karena 4 template WA yang ada semuanya
+  // situasional (butuh data simulasi/jadwal) - tidak ada yang cocok untuk
+  // "ajak hitung simulasi" sebelum simulasinya ada.
+  const hasSimulasi = Boolean(simulasiNominal && simulasiTenor);
+  const waMessage =
+    hasSimulasi && initialFollowupTemplate
+      ? fillWaPlaceholders(initialFollowupTemplate, placeholderData)
+      : `Assalamu'alaikum Bapak/Ibu ${contact.nama} 🙏\n\nSaya dari *Mitra Bertuah* — solusi dana tunai jaminan BPKB kendaraan di Pekanbaru.\n\nBoleh saya bantu hitungkan simulasi untuk ${contact.jenisKendaraan.toLowerCase()} ${contact.merkTipe} (${contact.tahun}) milik Bapak/Ibu?\n\nTerima kasih 🙏`;
   const waHref = phoneE164
-    ? `https://wa.me/${phoneE164}?text=${waMessage}`
+    ? `https://wa.me/${phoneE164}?text=${encodeURIComponent(waMessage)}`
     : undefined;
   // capabilities.clickToCall true (PBX) would originate the call from the
   // CRM instead of opening tel: — belum aktif, lihat docs/TELEPHONY.md.
   const dialHref = phoneE164 ? telUri(phoneE164) : undefined;
+  const hasScriptSidebar = Boolean(scripts && agentId && agentCreatedAt);
 
   return (
     <Sheet
@@ -152,7 +191,14 @@ export function CustomerDrawer({
         onOpenChange(next);
       }}
     >
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+      <SheetContent
+        className={cn(
+          "w-full overflow-hidden",
+          hasScriptSidebar ? "sm:max-w-3xl" : "sm:max-w-lg"
+        )}
+      >
+        <div className="flex h-full min-h-0">
+        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{contact.nama}</SheetTitle>
           <SheetDescription className="flex items-center gap-2">
@@ -311,6 +357,19 @@ export function CustomerDrawer({
                     onChange={(e) => setSimulasiTenor(e.target.value)}
                   />
                 </div>
+                <div className="col-span-2 space-y-1.5">
+                  <Label className="text-xs">Cicilan/bulan (Rp) — opsional</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="2500000"
+                    value={simulasiAngsuran}
+                    onChange={(e) => setSimulasiAngsuran(e.target.value)}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Isi manual kalau mau disebutkan ke customer — sistem tidak menghitung otomatis (rate bunga tidak difixed).
+                  </p>
+                </div>
               </div>
             )}
 
@@ -354,6 +413,19 @@ export function CustomerDrawer({
             <Save className="h-4 w-4" /> {saving ? "Menyimpan..." : "Simpan"}
           </Button>
         </SheetFooter>
+        </div>
+
+        {hasScriptSidebar && (
+          <div className="shrink-0 overflow-y-auto py-4 pr-4">
+            <ScriptSidebar
+              scripts={scripts!}
+              agentId={agentId!}
+              agentCreatedAt={agentCreatedAt!}
+              placeholderData={placeholderData}
+            />
+          </div>
+        )}
+        </div>
       </SheetContent>
     </Sheet>
   );

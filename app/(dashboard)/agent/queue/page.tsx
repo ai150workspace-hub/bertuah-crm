@@ -9,6 +9,8 @@ import {
   type ContactRow,
 } from "@/lib/contacts";
 import { getCapabilities } from "@/lib/telephony/provider";
+import { getActiveScriptContent } from "@/lib/scripts";
+import { getWaTemplate } from "@/lib/wa-templates";
 
 export default async function AgentQueuePage() {
   const profile = await getCurrentUser();
@@ -29,12 +31,14 @@ export default async function AgentQueuePage() {
 
   const rawContacts = ((contactRows ?? []) as ContactRow[]).map(mapDbContact);
 
-  // 3 operasi independen (tidak saling butuh hasil satu sama lain) - jalan
+  // 5 operasi independen (tidak saling butuh hasil satu sama lain) - jalan
   // bareng, bukan berurutan.
-  const [contacts, capabilities, activeSlots] = await Promise.all([
+  const [contacts, capabilities, activeSlots, scripts, initialFollowupTemplate] = await Promise.all([
     profile ? markPreviousCallFlags(rawContacts, profile.id) : Promise.resolve(rawContacts),
     getCapabilities(),
     profile ? getActiveSlots(supabase, profile.id) : Promise.resolve(null),
+    getActiveScriptContent(),
+    getWaTemplate("initial_followup"),
   ]);
 
   return (
@@ -51,6 +55,10 @@ export default async function AgentQueuePage() {
         capabilities={capabilities}
         activeSlots={activeSlots}
         agentStatus={profile?.agentStatus ?? undefined}
+        scripts={scripts}
+        agentId={profile?.id}
+        agentCreatedAt={profile?.createdAt}
+        initialFollowupTemplate={initialFollowupTemplate?.templateText ?? null}
       />
     </div>
   );

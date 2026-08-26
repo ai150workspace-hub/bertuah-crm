@@ -15,6 +15,8 @@ export interface SaveCallLogInput {
   tanggalFollowup?: string | null;
   simulasiNominal?: number | null;
   simulasiTenor?: number | null;
+  /** Cicilan/bulan - opsional, diisi manual agen (tidak dihitung dari rate). */
+  simulasiAngsuran?: number | null;
   notes?: string | null;
 }
 
@@ -60,6 +62,7 @@ export async function saveCallLog(
     callback_date: efek.jadwalkanPada ? efek.jadwalkanPada.toISOString() : null,
     simulasi_nominal: input.simulasiNominal ?? null,
     simulasi_tenor: input.simulasiTenor ?? null,
+    simulasi_angsuran: input.simulasiAngsuran ?? null,
   });
   // JANGAN isi level_1..level_4 lagi — hasil/sub_alasan yang jadi sumber
   // kebenaran sekarang (lihat migrasi 0003 dan docs/TELEPHONY.md Prompt 10).

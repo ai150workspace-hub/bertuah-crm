@@ -9,6 +9,7 @@ export interface CurrentUserProfile {
   role: UserRole;
   isActive: boolean;
   agentStatus: "active" | "pause" | "inactive" | null;
+  createdAt: string;
 }
 
 /**
@@ -34,7 +35,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUserProfile | null>
 
   const { data: profile } = await supabase
     .from("users")
-    .select("id, name, email, role, is_active, agent_status")
+    .select("id, name, email, role, is_active, agent_status, created_at")
     .eq("id", user.id)
     .maybeSingle();
   if (!profile) return null;
@@ -46,5 +47,6 @@ export const getCurrentUser = cache(async (): Promise<CurrentUserProfile | null>
     role: profile.role,
     isActive: profile.is_active,
     agentStatus: (profile.agent_status ?? null) as CurrentUserProfile["agentStatus"],
+    createdAt: profile.created_at,
   };
 });

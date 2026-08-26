@@ -19,9 +19,11 @@ import type { AppUser } from "@/types";
 export function TopBar({
   role,
   user,
+  badgeCounts,
 }: {
   role: "agent" | "admin";
   user: AppUser;
+  badgeCounts?: Partial<Record<string, number>>;
 }) {
   const pathname = usePathname();
   const items = role === "agent" ? AGENT_NAV : ADMIN_NAV;
@@ -70,19 +72,27 @@ export function TopBar({
                     </div>
                   );
                 }
+                const badgeCount = item.badgeKey ? badgeCounts?.[item.badgeKey] : undefined;
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium",
+                      "flex items-center justify-between gap-2.5 rounded-md px-3 py-2 text-sm font-medium",
                       isActive
                         ? "bg-sidebar-primary text-sidebar-primary-foreground"
                         : "text-sidebar-foreground/80 hover:bg-sidebar-accent"
                     )}
                   >
-                    <Icon className="h-4 w-4" />
-                    {item.label}
+                    <span className="flex items-center gap-2.5">
+                      <Icon className="h-4 w-4" />
+                      {item.label}
+                    </span>
+                    {!!badgeCount && (
+                      <span className="flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-hot px-1 text-[10px] font-semibold text-white">
+                        {badgeCount}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
