@@ -32,7 +32,18 @@ export interface EligibleContact {
   noHp: string;
 }
 
-export function CreateApplicationDialog({ contacts }: { contacts: EligibleContact[] }) {
+export interface LeasingPartnerOption {
+  id: string;
+  name: string;
+}
+
+export function CreateApplicationDialog({
+  contacts,
+  leasingPartners,
+}: {
+  contacts: EligibleContact[];
+  leasingPartners: LeasingPartnerOption[];
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -121,11 +132,23 @@ export function CreateApplicationDialog({ contacts }: { contacts: EligibleContac
 
             <div className="space-y-1.5">
               <Label className="text-xs">Leasing Partner</Label>
-              <Input
-                value={leasingPartner}
-                onChange={(e) => setLeasingPartner(e.target.value)}
-                placeholder="Nama perusahaan leasing"
-              />
+              <Select value={leasingPartner} onValueChange={(v) => setLeasingPartner(v ?? "")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue>{() => leasingPartner || "Pilih leasing partner..."}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {leasingPartners.map((lp) => (
+                    <SelectItem key={lp.id} value={lp.name}>
+                      {lp.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {leasingPartners.length === 0 && (
+                <p className="text-[11px] text-destructive">
+                  Belum ada leasing partner aktif — hubungi admin.
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">

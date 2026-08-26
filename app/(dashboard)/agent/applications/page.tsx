@@ -5,6 +5,7 @@ import { ApplicationsTable, type AgentApplicationRow } from "@/components/agent/
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { formatCompactRupiah } from "@/lib/format";
+import { getActiveLeasingPartners } from "@/lib/leasing-partners";
 import type { ApplicationStatus } from "@/types";
 
 const ACTIVE_STATUSES = ["Draft", "Sent to Leasing", "Survey", "Approved"];
@@ -30,7 +31,7 @@ export default async function AgentApplicationsPage() {
   const profile = await getCurrentUser();
   const supabase = await createClient();
 
-  const [{ data: appRows }, { data: hotLeadRows }] = await Promise.all([
+  const [{ data: appRows }, { data: hotLeadRows }, leasingPartners] = await Promise.all([
     profile
       ? supabase
           .from("applications")
@@ -48,6 +49,7 @@ export default async function AgentApplicationsPage() {
           .eq("status_call", "Hot Lead")
           .order("nama")
       : { data: null },
+    getActiveLeasingPartners(),
   ]);
 
   const apps = (appRows ?? []) as unknown as ApplicationDbRow[];
@@ -86,7 +88,10 @@ export default async function AgentApplicationsPage() {
             Pengajuan pembiayaan dari kontak Hot Lead kamu, sampai cair.
           </p>
         </div>
-        <CreateApplicationDialog contacts={eligibleContacts} />
+        <CreateApplicationDialog
+          contacts={eligibleContacts}
+          leasingPartners={leasingPartners.map((lp) => ({ id: lp.id, name: lp.name }))}
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

@@ -40,12 +40,7 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
   { label: "Contacts", href: "/admin/contacts", icon: Users },
   { label: "Agents", href: "/admin/agents", icon: UserCog },
-  {
-    label: "Leasing Partners",
-    href: "/admin/leasing",
-    icon: Building2,
-    comingSoon: true,
-  },
+  { label: "Leasing Partners", href: "/admin/leasing", icon: Building2 },
   { label: "Applications", href: "/admin/applications", icon: FileStack },
   {
     label: "Import Data",
