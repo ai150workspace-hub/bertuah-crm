@@ -193,12 +193,24 @@ export function CustomerDrawer({
     >
       <SheetContent
         className={cn(
-          "w-full overflow-hidden",
-          hasScriptSidebar ? "sm:max-w-3xl" : "sm:max-w-lg"
+          // Di layar sempit (<sm) form utama & panel script ditumpuk
+          // vertikal (bukan disejajarkan) - panel script lebar tetap
+          // 320px kalau dipaksa sejajar di layar sempit akan mendesak
+          // keluar form utama (telepon, status call, dst). Scroll jadi
+          // satu kolom di sini (overflow-y-auto), baru dipecah jadi 2
+          // kolom dengan scroll independen mulai breakpoint sm.
+          "w-full overflow-y-auto sm:overflow-hidden",
+          // SheetContent bawaan sudah punya kelas
+          // "data-[side=right]:sm:max-w-sm" - twMerge tidak menganggap itu
+          // "grup kelas" yang sama dengan sm:max-w-3xl polos (beda variant
+          // stack), jadi keduanya nempel dan yang bawaan menang di CSS.
+          // Override harus pakai variant persis sama supaya twMerge benar
+          // menggantikannya.
+          hasScriptSidebar ? "data-[side=right]:sm:max-w-3xl" : "data-[side=right]:sm:max-w-lg"
         )}
       >
-        <div className="flex h-full min-h-0">
-        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+        <div className="flex flex-col sm:h-full sm:min-h-0 sm:flex-row">
+        <div className="flex min-w-0 flex-1 flex-col sm:overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{contact.nama}</SheetTitle>
           <SheetDescription className="flex items-center gap-2">
@@ -416,7 +428,7 @@ export function CustomerDrawer({
         </div>
 
         {hasScriptSidebar && (
-          <div className="shrink-0 overflow-y-auto py-4 pr-4">
+          <div className="shrink-0 border-t px-4 py-4 sm:overflow-y-auto sm:border-t-0 sm:pr-4 sm:pl-0">
             <ScriptSidebar
               scripts={scripts!}
               agentId={agentId!}

@@ -171,7 +171,7 @@ export function ScriptSidebar({
 
   if (!open) {
     return (
-      <div className="flex shrink-0 flex-col items-center border-l pl-2">
+      <div className="flex shrink-0 flex-col items-center">
         <Button
           variant="ghost"
           size="icon"
@@ -185,7 +185,7 @@ export function ScriptSidebar({
   }
 
   return (
-    <div className="flex w-80 shrink-0 flex-col border-l pl-3">
+    <div className="flex w-full shrink-0 flex-col sm:w-80">
       <div className="mb-2 flex items-center justify-between">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Panduan Script
