@@ -80,10 +80,15 @@ export async function assignContacts(
     };
   }
 
-  const { error } = await service
-    .from("contacts")
-    .update({ assigned_to: agentId, assigned_at: new Date().toISOString() })
-    .in("id", contactIds);
+  // RPC, bukan update() langsung - assigned_to dan status_call harus naik
+  // bersamaan dalam satu statement atomik. Tanpa ini, kontak yang masih
+  // 'Uncalled'/'Inbound' bisa nyangkut permanen di agent kalau agent itu
+  // nonaktif nanti - deactivate_agent()/cron reshuffle hanya melepas
+  // status tertentu. Lihat migrasi 0018_inbound_release_safety_net.sql.
+  const { error } = await service.rpc("assign_contacts_atomic", {
+    p_contact_ids: contactIds,
+    p_agent_id: agentId,
+  });
   if (error) return { success: false, error: error.message };
 
   revalidatePath("/admin/contacts");
