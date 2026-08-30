@@ -203,6 +203,19 @@ export async function commitImport(input: CommitImportInput): Promise<CommitImpo
   } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Belum login." };
 
+  // Lapis keamanan sebenarnya untuk admin monitoring - halaman
+  // /admin/import sudah memblokir di UI, tapi itu bisa dilewati kalau
+  // action ini dipanggil langsung. RLS tidak membedakan admin biasa vs
+  // monitoring (keduanya role='admin'), jadi dicek eksplisit di sini.
+  const { data: profile } = await supabase
+    .from("users")
+    .select("is_restricted_admin")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (profile?.is_restricted_admin) {
+    return { success: false, error: "Akun Anda hanya untuk monitoring, tidak bisa mengimpor data." };
+  }
+
   const importable = input.rows.filter(
     (r) => r.status === "valid" || (r.status === "duplicate" && !input.skipDuplicates)
   );

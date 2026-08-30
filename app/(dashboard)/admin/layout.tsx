@@ -17,7 +17,12 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
   };
 
   return (
-    <DashboardShell role="admin" roleLabel="Admin / Operations" user={appUser}>
+    <DashboardShell
+      role="admin"
+      roleLabel="Admin / Operations"
+      user={appUser}
+      isRestrictedAdmin={profile.isRestrictedAdmin}
+    >
       {children}
     </DashboardShell>
   );

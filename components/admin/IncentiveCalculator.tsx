@@ -53,9 +53,11 @@ interface DealRow {
 export async function IncentiveCalculator({
   month,
   year,
+  isRestrictedAdmin,
 }: {
   month: number;
   year: number;
+  isRestrictedAdmin?: boolean;
 }) {
   const supabase = await createClient();
 
@@ -131,7 +133,9 @@ export async function IncentiveCalculator({
         </div>
         <div className="flex items-center gap-2">
           <IncentivePeriodPicker month={month} year={year} />
-          <ExportIncentiveCsvButton rows={results} month={month} year={year} />
+          {!isRestrictedAdmin && (
+            <ExportIncentiveCsvButton rows={results} month={month} year={year} />
+          )}
         </div>
       </CardHeader>
       <CardContent>

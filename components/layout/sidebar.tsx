@@ -10,14 +10,19 @@ export function Sidebar({
   role,
   roleLabel,
   badgeCounts,
+  isRestrictedAdmin,
 }: {
   role: "agent" | "admin";
   roleLabel: string;
   /** Angka kecil per nav item, keyed oleh NavItem.badgeKey (lihat nav-items.ts). */
   badgeCounts?: Partial<Record<string, number>>;
+  /** Admin monitoring - item dengan hideForRestrictedAdmin disembunyikan total. */
+  isRestrictedAdmin?: boolean;
 }) {
   const pathname = usePathname();
-  const items = role === "agent" ? AGENT_NAV : ADMIN_NAV;
+  const items = (role === "agent" ? AGENT_NAV : ADMIN_NAV).filter(
+    (item) => !(isRestrictedAdmin && item.hideForRestrictedAdmin)
+  );
 
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col md:shrink-0 bg-sidebar text-sidebar-foreground">

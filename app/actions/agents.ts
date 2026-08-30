@@ -123,3 +123,48 @@ export async function createAgent(input: CreateAgentInput): Promise<AgentActionR
   revalidatePath("/admin/agents");
   return { success: true };
 }
+
+export interface CreateAdminInput {
+  name: string;
+  email: string;
+  password: string;
+  /** true = admin monitoring - tidak bisa akses Import Data / tombol Export. */
+  isRestricted: boolean;
+}
+
+export async function createAdmin(input: CreateAdminInput): Promise<AgentActionResult> {
+  const check = await requireAdmin();
+  if (!check.ok) return { success: false, error: check.error };
+
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+  if (!name) return { success: false, error: "Nama wajib diisi." };
+  if (!email) return { success: false, error: "Email wajib diisi." };
+  if (input.password.length < 6) {
+    return { success: false, error: "Password minimal 6 karakter." };
+  }
+
+  const service = createServiceRoleClient();
+  const { data: authData, error: authError } = await service.auth.admin.createUser({
+    email,
+    password: input.password,
+    email_confirm: true,
+  });
+  if (authError) return { success: false, error: authError.message };
+
+  const { error: adminProfileError } = await service.from("users").insert({
+    id: authData.user.id,
+    name,
+    email,
+    role: "admin",
+    is_active: true,
+    is_restricted_admin: input.isRestricted,
+  });
+  if (adminProfileError) {
+    await service.auth.admin.deleteUser(authData.user.id);
+    return { success: false, error: adminProfileError.message };
+  }
+
+  revalidatePath("/admin/agents");
+  return { success: true };
+}

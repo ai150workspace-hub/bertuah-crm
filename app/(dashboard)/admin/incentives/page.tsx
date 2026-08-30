@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { formatRupiah } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import { calculateAgentIncentive } from "@/lib/incentive-calculator";
 import { IncentivePeriodPicker } from "@/components/admin/incentive-period-picker";
 import { ExportIncentiveCsvButton } from "@/components/admin/export-incentive-csv-button";
@@ -67,6 +68,7 @@ export default async function AdminIncentivesPage({
       : todayYear!;
 
   const supabase = await createClient();
+  const profile = await getCurrentUser();
 
   const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
   const nextMonth = month === 12 ? 1 : month + 1;
@@ -211,7 +213,9 @@ export default async function AdminIncentivesPage({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <IncentivePeriodPicker month={month} year={year} />
-            <ExportIncentiveCsvButton rows={rows} month={month} year={year} />
+            {!profile?.isRestrictedAdmin && (
+              <ExportIncentiveCsvButton rows={rows} month={month} year={year} />
+            )}
             <LockMonthButton month={month} year={year} locked={isLocked} />
           </div>
         </CardHeader>

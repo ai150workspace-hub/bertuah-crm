@@ -21,6 +21,8 @@ export interface NavItem {
   comingSoon?: boolean;
   /** Kunci ke badgeCounts (lihat DashboardShell) - angka kecil di sisi kanan item, disembunyikan kalau 0/tidak ada. */
   badgeKey?: string;
+  /** Disembunyikan total (bukan cuma disabled) untuk admin ber-flag is_restricted_admin. */
+  hideForRestrictedAdmin?: boolean;
 }
 
 export const AGENT_NAV: NavItem[] = [
@@ -46,6 +48,7 @@ export const ADMIN_NAV: NavItem[] = [
     label: "Import Data",
     href: "/admin/import",
     icon: UploadCloud,
+    hideForRestrictedAdmin: true,
   },
   { label: "Insentif", href: "/admin/incentives", icon: Wallet },
   { label: "Kelola Script", href: "/admin/scripts", icon: BookOpen },

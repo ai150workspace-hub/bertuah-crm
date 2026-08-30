@@ -17,6 +17,7 @@ import { DateRangeFilter } from "@/components/admin/date-range-filter";
 import { IncentiveCalculator } from "@/components/admin/IncentiveCalculator";
 import { formatCompactRupiah, formatPercent } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import { getAdminDashboardData } from "@/lib/admin-metrics";
 import { todayWib, startOfMonthWib } from "@/lib/wib-date";
 
@@ -36,6 +37,7 @@ export default async function AdminDashboardPage({
   const toParam = params.to;
   const from = typeof fromParam === "string" ? fromParam : startOfMonthWib(today);
   const to = typeof toParam === "string" ? toParam : today;
+  const profile = await getCurrentUser();
 
   const [todayYear, todayMonth] = today.split("-").map(Number);
   const incMonthParam = params.incMonth;
@@ -111,7 +113,7 @@ export default async function AdminDashboardPage({
 
       <AgentPerformanceTable agents={agents} />
 
-      <IncentiveCalculator month={incMonth} year={incYear} />
+      <IncentiveCalculator month={incMonth} year={incYear} isRestrictedAdmin={profile?.isRestrictedAdmin} />
     </div>
   );
 }

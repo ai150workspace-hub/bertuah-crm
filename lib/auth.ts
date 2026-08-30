@@ -10,6 +10,8 @@ export interface CurrentUserProfile {
   isActive: boolean;
   agentStatus: "active" | "pause" | "inactive" | null;
   createdAt: string;
+  /** Admin monitoring - tidak bisa akses Import Data / tombol Export. Selalu false untuk agent. */
+  isRestrictedAdmin: boolean;
 }
 
 /**
@@ -35,7 +37,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUserProfile | null>
 
   const { data: profile } = await supabase
     .from("users")
-    .select("id, name, email, role, is_active, agent_status, created_at")
+    .select("id, name, email, role, is_active, agent_status, created_at, is_restricted_admin")
     .eq("id", user.id)
     .maybeSingle();
   if (!profile) return null;
@@ -48,5 +50,6 @@ export const getCurrentUser = cache(async (): Promise<CurrentUserProfile | null>
     isActive: profile.is_active,
     agentStatus: (profile.agent_status ?? null) as CurrentUserProfile["agentStatus"],
     createdAt: profile.created_at,
+    isRestrictedAdmin: profile.role === "admin" ? Boolean(profile.is_restricted_admin) : false,
   };
 });

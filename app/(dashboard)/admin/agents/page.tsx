@@ -14,7 +14,9 @@ import type { AgentStatus, HeldContact, OtherAgentOption } from "@/components/ad
 import { DatabaseHealthCard, type DatabaseHealthData } from "@/components/admin/database-health-card";
 import { AgentsExportButton } from "@/components/admin/agents-export-button";
 import { CreateAgentDialog } from "@/components/admin/CreateAgentDialog";
+import { CreateAdminDialog } from "@/components/admin/CreateAdminDialog";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import { formatPercent } from "@/lib/format";
 import { wibDayStartIso, wibDayEndIso, todayWib, startOfMonthWib } from "@/lib/wib-date";
 import { adalahRpc } from "@/lib/call-outcome/derive";
@@ -72,6 +74,7 @@ export default async function AdminAgentsPage({
   const endIso = wibDayEndIso(to);
 
   const supabase = await createClient();
+  const profile = await getCurrentUser();
 
   const [
     { data: agentRows },
@@ -373,7 +376,10 @@ export default async function AdminAgentsPage({
         <h2 className="text-sm font-semibold">Performa per Agen</h2>
         <div className="flex items-center gap-2">
           <CreateAgentDialog />
-          <AgentsExportButton rows={rows} health={health} periodeTo={to} />
+          {!profile?.isRestrictedAdmin && <CreateAdminDialog />}
+          {!profile?.isRestrictedAdmin && (
+            <AgentsExportButton rows={rows} health={health} periodeTo={to} />
+          )}
         </div>
       </div>
 

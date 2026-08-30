@@ -20,13 +20,17 @@ export function TopBar({
   role,
   user,
   badgeCounts,
+  isRestrictedAdmin,
 }: {
   role: "agent" | "admin";
   user: AppUser;
   badgeCounts?: Partial<Record<string, number>>;
+  isRestrictedAdmin?: boolean;
 }) {
   const pathname = usePathname();
-  const items = role === "agent" ? AGENT_NAV : ADMIN_NAV;
+  const items = (role === "agent" ? AGENT_NAV : ADMIN_NAV).filter(
+    (item) => !(isRestrictedAdmin && item.hideForRestrictedAdmin)
+  );
   const initials = user.name
     .split(" ")
     .map((p) => p[0])
