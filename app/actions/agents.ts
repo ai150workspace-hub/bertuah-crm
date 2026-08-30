@@ -124,6 +124,51 @@ export async function createAgent(input: CreateAgentInput): Promise<AgentActionR
   return { success: true };
 }
 
+export interface ResetPasswordInput {
+  userId: string;
+  newPassword: string;
+}
+
+export async function resetUserPassword(input: ResetPasswordInput): Promise<AgentActionResult> {
+  const check = await requireAdmin();
+  if (!check.ok) return { success: false, error: check.error };
+  if (input.newPassword.length < 6) {
+    return { success: false, error: "Password minimal 6 karakter." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: requesterProfile } = await supabase
+    .from("users")
+    .select("is_restricted_admin")
+    .eq("id", user!.id)
+    .maybeSingle();
+
+  const { data: target } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", input.userId)
+    .maybeSingle();
+  if (!target) return { success: false, error: "Akun tidak ditemukan." };
+
+  // Admin monitoring tidak boleh reset password admin LAIN (bisa dipakai
+  // untuk ambil alih akun admin penuh) - dicek di server, bukan cuma
+  // disembunyikan di UI, sama seperti pola di commitImport().
+  if (target.role === "admin" && requesterProfile?.is_restricted_admin) {
+    return { success: false, error: "Admin monitoring tidak bisa reset password admin lain." };
+  }
+
+  const service = createServiceRoleClient();
+  const { error } = await service.auth.admin.updateUserById(input.userId, {
+    password: input.newPassword,
+  });
+  if (error) return { success: false, error: error.message };
+
+  return { success: true };
+}
+
 export interface CreateAdminInput {
   name: string;
   email: string;

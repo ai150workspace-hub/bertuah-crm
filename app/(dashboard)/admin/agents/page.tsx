@@ -15,6 +15,7 @@ import { DatabaseHealthCard, type DatabaseHealthData } from "@/components/admin/
 import { AgentsExportButton } from "@/components/admin/agents-export-button";
 import { CreateAgentDialog } from "@/components/admin/CreateAgentDialog";
 import { CreateAdminDialog } from "@/components/admin/CreateAdminDialog";
+import { AdminAccountsCard, type AdminAccountRow } from "@/components/admin/AdminAccountsCard";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { formatPercent } from "@/lib/format";
@@ -75,6 +76,25 @@ export default async function AdminAgentsPage({
 
   const supabase = await createClient();
   const profile = await getCurrentUser();
+
+  // Daftar akun admin cuma perlu di-fetch untuk admin penuh - admin
+  // monitoring tidak boleh lihat/kelola admin lain sama sekali (bukan cuma
+  // tombol reset password-nya yang disembunyikan).
+  const adminAccounts: AdminAccountRow[] = profile?.isRestrictedAdmin
+    ? []
+    : await supabase
+        .from("users")
+        .select("id, name, email, is_restricted_admin")
+        .eq("role", "admin")
+        .order("name")
+        .then(({ data }) =>
+          (data ?? []).map((a) => ({
+            id: a.id,
+            name: a.name,
+            email: a.email,
+            isRestricted: Boolean(a.is_restricted_admin),
+          }))
+        );
 
   const [
     { data: agentRows },
@@ -346,6 +366,10 @@ export default async function AdminAgentsPage({
           Report performa dan aktivitas tiap agen telemarketing.
         </p>
       </div>
+
+      {!profile?.isRestrictedAdmin && profile && (
+        <AdminAccountsCard admins={adminAccounts} currentUserId={profile.id} />
+      )}
 
       <DateRangeFilter from={from} to={to} />
 

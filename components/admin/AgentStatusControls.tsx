@@ -27,6 +27,7 @@ import {
 import { toast } from "sonner";
 import { pauseAgent, resumeAgent, deactivateAgent } from "@/app/actions/agents";
 import { assignContacts } from "@/app/actions/contacts";
+import { ResetPasswordButton } from "./ResetPasswordButton";
 
 export type AgentStatus = "active" | "pause" | "inactive";
 
@@ -54,6 +55,7 @@ function daysLeft(pauseStartedAt: string | null, pauseMaxDays: number): number {
 
 export function AgentStatusControls({
   agentId,
+  agentName,
   agentStatus,
   pauseStartedAt,
   pauseMaxDays,
@@ -61,6 +63,7 @@ export function AgentStatusControls({
   otherAgents,
 }: {
   agentId: string;
+  agentName: string;
   agentStatus: AgentStatus;
   pauseStartedAt: string | null;
   pauseMaxDays: number;
@@ -171,6 +174,7 @@ export function AgentStatusControls({
             Aktifkan Kembali
           </Button>
         )}
+        <ResetPasswordButton userId={agentId} userLabel={agentName} />
       </div>
 
       {agentStatus === "pause" && (

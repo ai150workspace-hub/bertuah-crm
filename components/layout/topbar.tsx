@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, LogOut, ShieldCheck } from "lucide-react";
+import { Menu, LogOut, ShieldCheck, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -11,9 +12,16 @@ import {
   SheetTrigger,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { AGENT_NAV, ADMIN_NAV } from "./nav-items";
 import { signOut } from "@/app/actions/auth";
+import { ChangePasswordDialog } from "./change-password-dialog";
 import type { AppUser } from "@/types";
 
 export function TopBar({
@@ -28,6 +36,7 @@ export function TopBar({
   isRestrictedAdmin?: boolean;
 }) {
   const pathname = usePathname();
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const items = (role === "agent" ? AGENT_NAV : ADMIN_NAV).filter(
     (item) => !(isRestrictedAdmin && item.hideForRestrictedAdmin)
   );
@@ -113,17 +122,31 @@ export function TopBar({
             {user.role}
           </div>
         </div>
-        <Avatar className="h-9 w-9">
-          <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
-            {initials}
-          </AvatarFallback>
-        </Avatar>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <button type="button" className="rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                <Avatar className="h-9 w-9">
+                  <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
+              </button>
+            }
+          />
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setChangePasswordOpen(true)}>
+              <KeyRound className="h-3.5 w-3.5" /> Ganti Password
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <form action={signOut}>
           <Button variant="ghost" size="icon" title="Keluar" type="submit">
             <LogOut className="h-4 w-4" />
           </Button>
         </form>
       </div>
+      <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
     </header>
   );
 }

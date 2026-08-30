@@ -212,6 +212,7 @@ function AgentRow({ row }: { row: AgentReportRow }) {
         <TableCell onClick={(e) => e.stopPropagation()}>
           <AgentStatusControls
             agentId={row.agentId}
+            agentName={row.agentName}
             agentStatus={row.agentStatus}
             pauseStartedAt={row.pauseStartedAt}
             pauseMaxDays={row.pauseMaxDays}
