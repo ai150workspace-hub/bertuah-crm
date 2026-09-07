@@ -60,3 +60,9 @@ export function formatDateID(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
   return `${d} ${BULAN_ID[m! - 1]} ${y}`;
 }
+
+/** Jam:menit kalender WIB (HH:mm) dari sebuah instant timestamptz. */
+export function wibTimeFromIso(iso: string): string {
+  const shifted = new Date(new Date(iso).getTime() + WIB_OFFSET_MS);
+  return `${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}`;
+}

@@ -11,6 +11,7 @@ import {
   ScrollText,
   RotateCcw,
   BookOpen,
+  History,
 } from "lucide-react";
 
 export interface NavItem {
@@ -51,6 +52,7 @@ export const ADMIN_NAV: NavItem[] = [
     hideForRestrictedAdmin: true,
   },
   { label: "Insentif", href: "/admin/incentives", icon: Wallet },
+  { label: "Log Aktivitas", href: "/admin/activity-log", icon: History },
   { label: "Kelola Script", href: "/admin/scripts", icon: BookOpen },
   {
     label: "Audit Log",

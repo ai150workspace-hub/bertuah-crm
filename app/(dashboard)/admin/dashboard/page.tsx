@@ -14,6 +14,7 @@ import { KpiCard } from "@/components/dashboard/kpi-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AgentPerformanceTable } from "@/components/admin/agent-performance-table";
 import { DateRangeFilter } from "@/components/admin/date-range-filter";
+import { StatusCallSummary } from "@/components/admin/StatusCallSummary";
 import { IncentiveCalculator } from "@/components/admin/IncentiveCalculator";
 import { formatCompactRupiah, formatPercent } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -52,10 +53,8 @@ export default async function AdminDashboardPage({
       : todayYear!;
 
   const supabase = await createClient();
-  const { databaseTotal, kpi, funnel, agents } = await getAdminDashboardData(supabase, {
-    from,
-    to,
-  });
+  const { databaseTotal, kpi, funnel, agents, statusCallBreakdown, statusCallBelumTercatat } =
+    await getAdminDashboardData(supabase, { from, to });
 
   return (
     <div className="space-y-6">
@@ -110,6 +109,12 @@ export default async function AdminDashboardPage({
           tone="success"
         />
       </div>
+
+      <StatusCallSummary
+        groups={statusCallBreakdown}
+        totalCalls={kpi.totalCalls}
+        belumTercatat={statusCallBelumTercatat}
+      />
 
       <AgentPerformanceTable agents={agents} />
 

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { adalahRpc } from "@/lib/call-outcome/derive";
+import { HASIL_PANGGILAN, GRUP_URUT, type KodeHasil } from "@/lib/call-outcome/catalog";
 import { wibDayStartIso, wibDayEndIso } from "@/lib/wib-date";
 
 export interface DateRange {
@@ -32,11 +33,26 @@ export interface AgentPerformanceRow {
   disbursed: number;
 }
 
+export interface StatusCallSummaryItem {
+  kode: KodeHasil;
+  label: string;
+  count: number;
+}
+
+export interface StatusCallSummaryGroup {
+  grup: string;
+  items: StatusCallSummaryItem[];
+  subtotal: number;
+}
+
 export interface AdminDashboardData {
   databaseTotal: number;
   kpi: AdminKpi;
   funnel: FunnelStage[];
   agents: AgentPerformanceRow[];
+  statusCallBreakdown: StatusCallSummaryGroup[];
+  /** Baris dalam periode yang `hasil`-nya null (data lama pra-migrasi 0003) — tidak masuk breakdown manapun. */
+  statusCallBelumTercatat: number;
 }
 
 interface CallLogRow {
@@ -98,6 +114,28 @@ export async function getAdminDashboardData(
 
   const totalCalls = logs.length;
   const rpcCount = logs.filter((l) => l.hasil && adalahRpc(l.hasil as Parameters<typeof adalahRpc>[0])).length;
+
+  // Breakdown per hasil, dari `logs` yang SAMA dengan yang menghitung
+  // totalCalls di atas - dijamin subtotal-nya selalu pas dengan "Total
+  // Panggilan" di KPI card, bukan query terpisah yang bisa berbeda.
+  const countByKode = new Map<KodeHasil, number>();
+  let belumTercatat = 0;
+  for (const log of logs) {
+    if (!log.hasil) {
+      belumTercatat++;
+      continue;
+    }
+    const kode = log.hasil as KodeHasil;
+    countByKode.set(kode, (countByKode.get(kode) ?? 0) + 1);
+  }
+  const statusCallBreakdown: StatusCallSummaryGroup[] = GRUP_URUT.map((grup) => {
+    const items = HASIL_PANGGILAN.filter((h) => h.grup === grup).map((h) => ({
+      kode: h.kode,
+      label: h.label,
+      count: countByKode.get(h.kode) ?? 0,
+    }));
+    return { grup, items, subtotal: items.reduce((sum, i) => sum + i.count, 0) };
+  });
   const contactRate = totalCalls ? (rpcCount / totalCalls) * 100 : 0;
   const interest = logs.filter((l) => l.hasil === "MINAT").length;
   const hotLeads = logs.filter((l) => l.hasil === "MINAT" || l.hasil === "JANJI_TEMU").length;
@@ -165,5 +203,12 @@ export async function getAdminDashboardData(
     disbursed: disbursedByAgent.get(u.id) ?? 0,
   }));
 
-  return { databaseTotal: databaseTotal ?? 0, kpi, funnel, agents };
+  return {
+    databaseTotal: databaseTotal ?? 0,
+    kpi,
+    funnel,
+    agents,
+    statusCallBreakdown,
+    statusCallBelumTercatat: belumTercatat,
+  };
 }
