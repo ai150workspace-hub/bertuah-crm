@@ -35,7 +35,7 @@ import {
   type KodeHasil,
   type KodeSubAlasan,
 } from "@/lib/call-outcome/catalog";
-import { infoHasil, validasiHasil } from "@/lib/call-outcome/derive";
+import { infoHasil, validasiHasil, catatanMinLength } from "@/lib/call-outcome/derive";
 import { saveCallLog, getPreviousCallHistory, type PreviousCallHistoryEntry } from "@/app/actions/call-log";
 import { telUri, normalisasiNomor } from "@/lib/telephony/phone";
 import type { ProviderCapabilities } from "@/lib/telephony/types";
@@ -90,6 +90,8 @@ export function CustomerDrawer({
 
   const selected = kode ? infoHasil(kode) : null;
   const wajib = (selected?.wajib ?? []) as readonly string[];
+  const catatanMin = kode ? catatanMinLength(kode) : 0;
+  const catatanPanjang = notes.trim().length;
 
   function resetForm() {
     setKode("");
@@ -117,6 +119,7 @@ export function CustomerDrawer({
       tanggalFollowup: tanggalFollowup || null,
       simulasiNominal: simulasiNominal ? Number(simulasiNominal) : null,
       simulasiTenor: simulasiTenor ? Number(simulasiTenor) : null,
+      catatan: notes,
     });
 
     if (!validasi.valid) {
@@ -392,13 +395,29 @@ export function CustomerDrawer({
             )}
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Catatan</Label>
+              <Label className="text-xs">
+                Catatan {catatanMin > 0 && <span className="text-destructive">*wajib</span>}
+              </Label>
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Catatan tambahan hasil percakapan..."
+                placeholder={
+                  catatanMin > 0
+                    ? "Jelaskan singkat apa yang bikin hasilnya begini..."
+                    : "Catatan tambahan hasil percakapan..."
+                }
                 rows={3}
               />
+              {catatanMin > 0 && (
+                <p
+                  className={cn(
+                    "text-right text-xs tabular-nums",
+                    catatanPanjang < catatanMin ? "text-destructive" : "text-muted-foreground"
+                  )}
+                >
+                  {catatanPanjang}/{catatanMin}
+                </p>
+              )}
             </div>
 
             {!capabilities.autoRecording && (

@@ -66,3 +66,10 @@ export function wibTimeFromIso(iso: string): string {
   const shifted = new Date(new Date(iso).getTime() + WIB_OFFSET_MS);
   return `${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}`;
 }
+
+/** "DD Mon, HH:mm" WIB dari sebuah instant timestamptz - dipendekkan (tanpa tahun) untuk daftar padat seperti Catatan Lapangan. */
+export function formatDateTimeShortID(iso: string): string {
+  const shifted = new Date(new Date(iso).getTime() + WIB_OFFSET_MS);
+  const bulan = BULAN_ID[shifted.getUTCMonth()];
+  return `${pad(shifted.getUTCDate())} ${bulan}, ${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}`;
+}

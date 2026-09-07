@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { adalahRpc } from "@/lib/call-outcome/derive";
+import { adalahRpc, infoHasil, statusWajibCatatan } from "@/lib/call-outcome/derive";
 import { HASIL_PANGGILAN, GRUP_URUT, type KodeHasil } from "@/lib/call-outcome/catalog";
 import { wibDayStartIso, wibDayEndIso } from "@/lib/wib-date";
 
@@ -211,4 +211,67 @@ export async function getAdminDashboardData(
     statusCallBreakdown,
     statusCallBelumTercatat: belumTercatat,
   };
+}
+
+// ---------------------------------------------------------------------
+// Catatan Lapangan - list terpisah dari breakdown agregat di atas (query
+// beda, dijalankan terpisah, jangan digabung jadi satu query kompleks).
+// ---------------------------------------------------------------------
+
+export interface CatatanLapanganEntry {
+  id: string;
+  timestamp: string;
+  kode: KodeHasil;
+  label: string;
+  catatan: string;
+  agentName: string;
+  namaKonsumen: string;
+}
+
+interface CatatanLapanganRow {
+  id: string;
+  timestamp: string;
+  hasil: string;
+  call_notes: string | null;
+  users: { name: string } | null;
+  contacts: { nama: string } | null;
+}
+
+const CATATAN_LAPANGAN_LIMIT = 20;
+
+/**
+ * Catatan mentah dari call_logs untuk 7 status "Bicara dengan orangnya"
+ * (lihat statusWajibCatatan() - satu-satunya definisi daftar ini), periode
+ * yang sama dengan filter Dashboard, terbaru dulu, maksimal 20 baris.
+ */
+export async function getCatatanLapangan(
+  supabase: SupabaseClient,
+  range: DateRange
+): Promise<CatatanLapanganEntry[]> {
+  const startIso = wibDayStartIso(range.from);
+  const endIso = wibDayEndIso(range.to);
+
+  const { data } = await supabase
+    .from("call_logs")
+    .select("id, timestamp, hasil, call_notes, users(name), contacts!inner(nama)")
+    .in("hasil", statusWajibCatatan())
+    .not("call_notes", "is", null)
+    .neq("call_notes", "")
+    .gte("timestamp", startIso)
+    .lte("timestamp", endIso)
+    .order("timestamp", { ascending: false })
+    .limit(CATATAN_LAPANGAN_LIMIT)
+    .returns<CatatanLapanganRow[]>();
+
+  return (data ?? [])
+    .filter((r) => (r.call_notes ?? "").trim().length > 0)
+    .map((r) => ({
+      id: r.id,
+      timestamp: r.timestamp,
+      kode: r.hasil as KodeHasil,
+      label: infoHasil(r.hasil as KodeHasil).label,
+      catatan: r.call_notes!.trim(),
+      agentName: r.users?.name ?? "—",
+      namaKonsumen: r.contacts?.nama ?? "—",
+    }));
 }

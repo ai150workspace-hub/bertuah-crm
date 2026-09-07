@@ -15,11 +15,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AgentPerformanceTable } from "@/components/admin/agent-performance-table";
 import { DateRangeFilter } from "@/components/admin/date-range-filter";
 import { StatusCallSummary } from "@/components/admin/StatusCallSummary";
+import { CatatanLapangan } from "@/components/admin/CatatanLapangan";
 import { IncentiveCalculator } from "@/components/admin/IncentiveCalculator";
 import { formatCompactRupiah, formatPercent } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getAdminDashboardData } from "@/lib/admin-metrics";
+import { getAdminDashboardData, getCatatanLapangan } from "@/lib/admin-metrics";
 import { todayWib, startOfMonthWib } from "@/lib/wib-date";
 
 // recharts cukup besar - dipisah jadi chunk sendiri, bukan ikut bundle
@@ -53,8 +54,15 @@ export default async function AdminDashboardPage({
       : todayYear!;
 
   const supabase = await createClient();
-  const { databaseTotal, kpi, funnel, agents, statusCallBreakdown, statusCallBelumTercatat } =
-    await getAdminDashboardData(supabase, { from, to });
+  // Query agregasi (breakdown) & query list (catatan) dijalankan terpisah -
+  // dua panggilan Supabase independen, bukan satu query gabungan kompleks.
+  const [
+    { databaseTotal, kpi, funnel, agents, statusCallBreakdown, statusCallBelumTercatat },
+    catatanLapangan,
+  ] = await Promise.all([
+    getAdminDashboardData(supabase, { from, to }),
+    getCatatanLapangan(supabase, { from, to }),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -115,6 +123,8 @@ export default async function AdminDashboardPage({
         totalCalls={kpi.totalCalls}
         belumTercatat={statusCallBelumTercatat}
       />
+
+      <CatatanLapangan entries={catatanLapangan} from={from} to={to} />
 
       <AgentPerformanceTable agents={agents} />
 

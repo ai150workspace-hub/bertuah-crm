@@ -14,8 +14,17 @@
 // Sekarang: 1 dropdown. Sub-alasan HANYA muncul untuk TIDAK_MEMENUHI_SYARAT,
 // karena justru di situlah data paling berharga yang kamu punya.
 
+// Kategori "Catatan Bermakna" untuk 7 status di grup "Bicara dengan
+// orangnya" (lihat catatanKategori di bawah) - dipakai untuk warna badge
+// dan tab filter di CatatanLapangan (dashboard admin). null untuk 5 status
+// mekanis yang tidak wajib catatan / tidak tampil di situ.
+export type KategoriCatatan = 'positif' | 'netral' | 'negatif';
+
 export const HASIL_PANGGILAN = [
   // ---- Bicara dengan orang yang tepat (RPC = true) --------------------
+  // catatanMin: minimal karakter catatan (trimmed) yang diwajibkan untuk
+  // 7 status ini - Hot Lead pakai 5 (jangan hambat momentum closing),
+  // sisanya 10 (butuh penjelasan). 0 = opsional (5 status mekanis di bawah).
   {
     kode: 'MINAT',
     label: 'Tertarik — kirim simulasi',
@@ -24,6 +33,8 @@ export const HASIL_PANGGILAN = [
     statusKontak: 'Hot Lead',
     wajib: ['simulasi'],
     aksi: 'Kirim simulasi WA sekarang, jangan ditunda.',
+    catatanMin: 5,
+    catatanKategori: 'positif' as KategoriCatatan,
   },
   {
     kode: 'JANJI_TEMU',
@@ -33,6 +44,8 @@ export const HASIL_PANGGILAN = [
     statusKontak: 'Hot Lead',
     wajib: ['tanggal_followup'],
     aksi: 'Masuk antrean pada hari H.',
+    catatanMin: 5,
+    catatanKategori: 'positif' as KategoriCatatan,
   },
   {
     kode: 'PIKIR_PIKIR',
@@ -42,6 +55,8 @@ export const HASIL_PANGGILAN = [
     statusKontak: 'Warm',
     wajib: ['tanggal_followup'],
     aksi: 'Masuk antrean pada tanggal yang dijanjikan.',
+    catatanMin: 10,
+    catatanKategori: 'netral' as KategoriCatatan,
   },
   {
     kode: 'KONFIRMASI_PASANGAN',
@@ -51,6 +66,8 @@ export const HASIL_PANGGILAN = [
     statusKontak: 'Warm',
     wajib: ['tanggal_followup'],
     aksi: 'Masuk antrean pada tanggal yang dijanjikan.',
+    catatanMin: 10,
+    catatanKategori: 'netral' as KategoriCatatan,
   },
   {
     kode: 'TOLAK_HARGA',
@@ -60,6 +77,8 @@ export const HASIL_PANGGILAN = [
     statusKontak: 'Closed',
     wajib: [],
     aksi: 'Kalau sering muncul, paket rate-mu tidak kompetitif.',
+    catatanMin: 10,
+    catatanKategori: 'negatif' as KategoriCatatan,
   },
   {
     kode: 'TOLAK_BUTUH',
@@ -69,6 +88,8 @@ export const HASIL_PANGGILAN = [
     statusKontak: 'Closed',
     wajib: [],
     aksi: 'Boleh dihubungi lagi 6 bulan lagi.',
+    catatanMin: 10,
+    catatanKategori: 'negatif' as KategoriCatatan,
   },
   {
     kode: 'TIDAK_MEMENUHI_SYARAT',
@@ -78,6 +99,8 @@ export const HASIL_PANGGILAN = [
     statusKontak: 'Closed',
     wajib: ['sub_alasan'],
     aksi: 'INI angka paling berharga di sistem — ia mengukur mutu databasemu.',
+    catatanMin: 10,
+    catatanKategori: 'negatif' as KategoriCatatan,
   },
 
   // ---- Tersambung tapi bukan orangnya (RPC = false) -------------------
@@ -89,6 +112,8 @@ export const HASIL_PANGGILAN = [
     statusKontak: 'In Progress',
     wajib: ['tanggal_followup'],
     aksi: 'Masuk antrean pada hari H.',
+    catatanMin: 0,
+    catatanKategori: null as KategoriCatatan | null,
   },
   {
     kode: 'BUKAN_ORANGNYA',
@@ -98,6 +123,8 @@ export const HASIL_PANGGILAN = [
     statusKontak: 'In Progress',
     wajib: [],
     aksi: 'Coba lagi di jam berbeda.',
+    catatanMin: 0,
+    catatanKategori: null as KategoriCatatan | null,
   },
 
   // ---- Tidak tersambung (RPC = false) --------------------------------
@@ -109,6 +136,8 @@ export const HASIL_PANGGILAN = [
     statusKontak: 'In Progress',
     wajib: [],
     aksi: 'Coba lagi maksimal 3 kali, lalu istirahatkan.',
+    catatanMin: 0,
+    catatanKategori: null as KategoriCatatan | null,
   },
   {
     kode: 'NOMOR_SALAH',
@@ -118,6 +147,8 @@ export const HASIL_PANGGILAN = [
     statusKontak: 'Invalid',
     wajib: [],
     aksi: 'Tidak bisa di-assign ulang.',
+    catatanMin: 0,
+    catatanKategori: null as KategoriCatatan | null,
   },
   {
     kode: 'JANGAN_HUBUNGI',
@@ -128,6 +159,8 @@ export const HASIL_PANGGILAN = [
     wajib: [],
     aksi: 'MASUK do_not_contact. Kewajiban POJK 6/2022 — hentikan penawaran '
         + 'begitu persetujuan ditarik. Tidak bisa dibatalkan mitra.',
+    catatanMin: 0,
+    catatanKategori: null as KategoriCatatan | null,
   },
 ] as const;
 

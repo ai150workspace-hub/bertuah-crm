@@ -3,6 +3,7 @@ import { DateRangeFilter } from "@/components/admin/date-range-filter";
 import { createClient } from "@/lib/supabase/server";
 import { wibDayStartIso, wibDayEndIso, wibDateFromIso, wibTimeFromIso, todayWib } from "@/lib/wib-date";
 import { HASIL_PANGGILAN } from "@/lib/call-outcome/catalog";
+import { statusWajibCatatan } from "@/lib/call-outcome/derive";
 
 const PAGE_SIZE = 50;
 const HASIL_LABEL = new Map(HASIL_PANGGILAN.map((h) => [h.kode, h.label]));
@@ -39,11 +40,17 @@ export default async function ActivityLogPage({
 
   const agentParam = params.agent;
   const hasilParam = params.hasil;
+  const hasilGroupParam = params.hasil_group;
   const qParam = params.q;
   const pageParam = params.page;
 
   const agent = typeof agentParam === "string" ? agentParam : "all";
   const hasil = typeof hasilParam === "string" ? hasilParam : "all";
+  // hasil_group="wajib_catatan" datang dari link "Lihat semua di Log
+  // Aktivitas" di CatatanLapangan (dashboard) - pre-filter ke 7 status yang
+  // wajib catatan. Kalau agen pilih satu status eksplisit dari dropdown,
+  // itu yang menang (lihat prioritas query di bawah).
+  const hasilGroup = typeof hasilGroupParam === "string" ? hasilGroupParam : "";
   const q = typeof qParam === "string" ? qParam : "";
   const page = typeof pageParam === "string" && Number(pageParam) > 0 ? Number(pageParam) : 1;
 
@@ -60,6 +67,7 @@ export default async function ActivityLogPage({
 
   if (agent !== "all") query = query.eq("agent_id", agent);
   if (hasil !== "all") query = query.eq("hasil", hasil);
+  else if (hasilGroup === "wajib_catatan") query = query.in("hasil", statusWajibCatatan());
   if (q.trim()) {
     query = query.or(`nama.ilike.%${q.trim()}%,no_hp.ilike.%${q.trim()}%`, {
       referencedTable: "contacts",
@@ -116,6 +124,7 @@ export default async function ActivityLogPage({
         agents={(agentRows ?? []).map((a) => ({ id: a.id, name: a.name }))}
         agentFilter={agent}
         hasilFilter={hasil}
+        hasilGroup={hasilGroup}
         q={q}
         page={page}
         pageSize={PAGE_SIZE}

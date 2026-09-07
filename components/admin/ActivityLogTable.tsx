@@ -55,6 +55,7 @@ export function ActivityLogTable({
   agents,
   agentFilter,
   hasilFilter,
+  hasilGroup,
   q,
   page,
   pageSize,
@@ -66,6 +67,8 @@ export function ActivityLogTable({
   agents: AgentOption[];
   agentFilter: string;
   hasilFilter: string;
+  /** "wajib_catatan" kalau datang dari link "Lihat semua" di CatatanLapangan (dashboard). */
+  hasilGroup: string;
   q: string;
   page: number;
   pageSize: number;
@@ -112,7 +115,14 @@ export function ActivityLogTable({
     }
 
     startExport(async () => {
-      const result = await exportActivityLogRows({ from, to, agent: agentFilter, hasil: hasilFilter, q });
+      const result = await exportActivityLogRows({
+        from,
+        to,
+        agent: agentFilter,
+        hasil: hasilFilter,
+        hasilGroup,
+        q,
+      });
       if (!result.success) {
         toast.error("Gagal export.", { description: result.error });
         return;
@@ -153,7 +163,10 @@ export function ActivityLogTable({
             </SelectContent>
           </Select>
 
-          <Select value={hasilFilter} onValueChange={(v) => apply({ hasil: v ?? "all" })}>
+          <Select
+            value={hasilFilter}
+            onValueChange={(v) => apply({ hasil: v ?? "all", hasil_group: "" })}
+          >
             <SelectTrigger className="w-56">
               <SelectValue>{() => hasilLabel}</SelectValue>
             </SelectTrigger>
@@ -190,6 +203,19 @@ export function ActivityLogTable({
           Export Excel
         </Button>
       </div>
+
+      {hasilFilter === "all" && hasilGroup === "wajib_catatan" && (
+        <div className="flex items-center gap-2 rounded-md border border-hot/30 bg-hot/5 px-3 py-1.5 text-xs text-hot">
+          <span>Difilter ke 7 status &quot;Bicara Dengan Orangnya&quot; (dari Catatan Lapangan).</span>
+          <button
+            type="button"
+            className="font-medium underline underline-offset-2 hover:no-underline"
+            onClick={() => apply({ hasil_group: "" })}
+          >
+            Hapus filter
+          </button>
+        </div>
+      )}
 
       <p className="text-sm text-muted-foreground">
         Menampilkan {rows.length} dari {totalCount} total aktivitas sesuai filter

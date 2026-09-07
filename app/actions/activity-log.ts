@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { wibDayStartIso, wibDayEndIso, wibDateFromIso, wibTimeFromIso } from "@/lib/wib-date";
 import { HASIL_PANGGILAN } from "@/lib/call-outcome/catalog";
+import { statusWajibCatatan } from "@/lib/call-outcome/derive";
 
 const HASIL_LABEL = new Map(HASIL_PANGGILAN.map((h) => [h.kode, h.label]));
 
@@ -16,6 +17,8 @@ export interface ActivityLogFilters {
   to: string;
   agent: string; // "all" atau users.id
   hasil: string; // "all" atau salah satu KodeHasil
+  /** "wajib_catatan" = 7 status "Bicara dengan orangnya" (link dari CatatanLapangan) - dipakai kalau hasil="all". */
+  hasilGroup?: string;
   q: string;
 }
 
@@ -97,6 +100,7 @@ export async function exportActivityLogRows(
 
   if (filters.agent !== "all") query = query.eq("agent_id", filters.agent);
   if (filters.hasil !== "all") query = query.eq("hasil", filters.hasil);
+  else if (filters.hasilGroup === "wajib_catatan") query = query.in("hasil", statusWajibCatatan());
   if (filters.q.trim()) {
     const q = filters.q.trim();
     query = query.or(`nama.ilike.%${q}%,no_hp.ilike.%${q}%`, { referencedTable: "contacts" });

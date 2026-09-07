@@ -1,5 +1,5 @@
 import { HASIL_PANGGILAN, SUB_ALASAN_TIDAK_LAYAK } from '../lib/call-outcome/catalog';
-import { dariPohonLama, validasiHasil, efekSamping, adalahRpc, statusKontakDari, semuaKode } from '../lib/call-outcome/derive';
+import { dariPohonLama, validasiHasil, efekSamping, adalahRpc, statusKontakDari, semuaKode, statusWajibCatatan } from '../lib/call-outcome/derive';
 
 let ok=0, gagal=0;
 const cek=(n:string,a:unknown,b:unknown)=>{
@@ -47,20 +47,41 @@ cek("NOMOR_SALAH BUKAN RPC", adalahRpc('NOMOR_SALAH'), false);
 
 console.log("\n== validasi field wajib ==");
 cek("MINAT tanpa simulasi ditolak", validasiHasil({kode:'MINAT'}).valid, false);
-cek("MINAT dengan simulasi lolos",
-  validasiHasil({kode:'MINAT',simulasiNominal:50_000_000,simulasiTenor:24}).valid, true);
+cek("MINAT dengan simulasi + catatan lolos",
+  validasiHasil({kode:'MINAT',simulasiNominal:50_000_000,simulasiTenor:24,catatan:'Sangat tertarik'}).valid, true);
 cek("TIDAK_MEMENUHI_SYARAT tanpa sub_alasan ditolak", validasiHasil({kode:'TIDAK_MEMENUHI_SYARAT'}).valid, false);
-cek("dengan sub_alasan lolos",
-  validasiHasil({kode:'TIDAK_MEMENUHI_SYARAT',subAlasan:'BPKB_MASIH_KREDIT'}).valid, true);
+cek("dengan sub_alasan + catatan lolos",
+  validasiHasil({kode:'TIDAK_MEMENUHI_SYARAT',subAlasan:'BPKB_MASIH_KREDIT',catatan:'BPKB masih di leasing lain'}).valid, true);
 const besok = new Date(Date.now()+86400000).toISOString();
 cek("JANJI_TEMU tanpa tanggal ditolak", validasiHasil({kode:'JANJI_TEMU'}).valid, false);
-cek("JANJI_TEMU dengan tanggal lolos", validasiHasil({kode:'JANJI_TEMU',tanggalFollowup:besok}).valid, true);
+cek("JANJI_TEMU dengan tanggal + catatan lolos",
+  validasiHasil({kode:'JANJI_TEMU',tanggalFollowup:besok,catatan:'Janji survey Senin'}).valid, true);
 cek("tanggal masa lalu ditolak",
-  validasiHasil({kode:'JANJI_TEMU',tanggalFollowup:'2020-01-01'}).valid, false);
+  validasiHasil({kode:'JANJI_TEMU',tanggalFollowup:'2020-01-01',catatan:'Janji survey Senin'}).valid, false);
 cek("TIDAK_DIANGKAT tanpa apa-apa lolos", validasiHasil({kode:'TIDAK_DIANGKAT'}).valid, true);
 cek("PIKIR_PIKIR tanpa tanggal ditolak", validasiHasil({kode:'PIKIR_PIKIR'}).valid, false);
-cek("PIKIR_PIKIR dengan tanggal lolos",
-  validasiHasil({kode:'PIKIR_PIKIR',tanggalFollowup:besok}).valid, true);
+cek("PIKIR_PIKIR dengan tanggal + catatan lolos",
+  validasiHasil({kode:'PIKIR_PIKIR',tanggalFollowup:besok,catatan:'Mau diskusi dulu'}).valid, true);
+
+console.log("\n== catatan wajib untuk 7 status 'Bicara dengan orangnya' ==");
+cek("statusWajibCatatan() = 7 kode",
+  statusWajibCatatan().sort(),
+  ['JANJI_TEMU','KONFIRMASI_PASANGAN','MINAT','PIKIR_PIKIR','TIDAK_MEMENUHI_SYARAT','TOLAK_BUTUH','TOLAK_HARGA'].sort());
+cek("MINAT catatan 4 karakter (kurang dari 5) ditolak",
+  validasiHasil({kode:'MINAT',simulasiNominal:1,simulasiTenor:1,catatan:'abcd'}).valid, false);
+cek("MINAT catatan tepat 5 karakter lolos",
+  validasiHasil({kode:'MINAT',simulasiNominal:1,simulasiTenor:1,catatan:'abcde'}).valid, true);
+cek("TOLAK_HARGA tanpa catatan ditolak", validasiHasil({kode:'TOLAK_HARGA'}).valid, false);
+cek("TOLAK_HARGA catatan 9 karakter (kurang dari 10) ditolak",
+  validasiHasil({kode:'TOLAK_HARGA',catatan:'123456789'}).valid, false);
+cek("TOLAK_HARGA catatan tepat 10 karakter lolos",
+  validasiHasil({kode:'TOLAK_HARGA',catatan:'1234567890'}).valid, true);
+cek("catatan spasi kosong dianggap tidak diisi",
+  validasiHasil({kode:'TOLAK_HARGA',catatan:'          '}).valid, false);
+cek("TIDAK_DIANGKAT (status mekanis) tanpa catatan tetap lolos",
+  validasiHasil({kode:'TIDAK_DIANGKAT'}).valid, true);
+cek("BUKAN_ORANGNYA (status mekanis) tanpa catatan tetap lolos",
+  validasiHasil({kode:'BUKAN_ORANGNYA'}).valid, true);
 
 console.log("\n== efek samping ==");
 cek("PIKIR_PIKIR tanpa tanggal -> tidak ada jadwal otomatis (wajib diisi mitra)",

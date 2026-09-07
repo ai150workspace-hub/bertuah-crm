@@ -42,6 +42,7 @@ export async function saveCallLog(
     tanggalFollowup: input.tanggalFollowup ?? null,
     simulasiNominal: input.simulasiNominal ?? null,
     simulasiTenor: input.simulasiTenor ?? null,
+    catatan: input.notes ?? null,
   });
   if (!validasi.valid) {
     return { success: false, error: validasi.error[0] };

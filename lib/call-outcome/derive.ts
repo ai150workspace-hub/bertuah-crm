@@ -9,7 +9,7 @@
 
 import {
   HASIL_PANGGILAN, SUB_ALASAN_TIDAK_LAYAK,
-  type KodeHasil, type KodeSubAlasan, type StatusKontak,
+  type KodeHasil, type KodeSubAlasan, type StatusKontak, type KategoriCatatan,
 } from './catalog';
 
 const PETA = new Map(HASIL_PANGGILAN.map(h => [h.kode, h]));
@@ -33,12 +33,36 @@ export function statusKontakDari(kode: KodeHasil): StatusKontak {
   return infoHasil(kode).statusKontak;
 }
 
+/** Minimal karakter catatan (trimmed) yang diwajibkan untuk kode ini. 0 = opsional. */
+export function catatanMinLength(kode: KodeHasil): number {
+  return infoHasil(kode).catatanMin;
+}
+
+export function kategoriCatatan(kode: KodeHasil): KategoriCatatan | null {
+  return infoHasil(kode).catatanKategori;
+}
+
+/**
+ * 7 status "Bicara dengan orangnya" yang wajib catatan (catatanMin > 0) -
+ * satu-satunya tempat daftar ini didefinisikan. Dipakai oleh validasi form
+ * (customer-drawer), query Catatan Lapangan, dan filter "Lihat semua" di
+ * Log Aktivitas - jangan menuliskan ulang daftar kode ini di tempat lain.
+ */
+export function statusWajibCatatan(): KodeHasil[] {
+  return HASIL_PANGGILAN.filter((h) => h.catatanMin > 0).map((h) => h.kode);
+}
+
+export function statusByKategoriCatatan(kategori: KategoriCatatan): KodeHasil[] {
+  return HASIL_PANGGILAN.filter((h) => h.catatanKategori === kategori).map((h) => h.kode);
+}
+
 export interface InputHasil {
   kode: KodeHasil;
   subAlasan?: KodeSubAlasan | null;
   tanggalFollowup?: string | Date | null;
   simulasiNominal?: number | null;
   simulasiTenor?: number | null;
+  catatan?: string | null;
 }
 
 export interface HasilValidasi {
@@ -79,6 +103,13 @@ export function validasiHasil(input: InputHasil): HasilValidasi {
       error.push('Isi nominal simulasi yang kamu sampaikan ke nasabah.');
     if (!input.simulasiTenor || input.simulasiTenor <= 0)
       error.push('Isi tenor simulasi.');
+  }
+
+  // 7 status "Bicara dengan orangnya" wajib catatan (minimal karakter beda
+  // per status, lihat catatanMin di catalog.ts) - ada percakapan nyata yang
+  // perlu dijelaskan di situ, beda dengan 5 status mekanis (catatanMin: 0).
+  if (h.catatanMin > 0 && (input.catatan ?? '').trim().length < h.catatanMin) {
+    error.push('Wajib isi catatan singkat — bantu tim pelajari pola dari setiap hasil percakapan.');
   }
 
   return { valid: error.length === 0, error };
