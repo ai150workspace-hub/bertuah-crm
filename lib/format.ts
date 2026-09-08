@@ -16,3 +16,7 @@ export function formatCompactRupiah(value: number): string {
 export function formatPercent(value: number, digits = 1): string {
   return `${value.toFixed(digits)}%`;
 }
+
+export function formatNumber(value: number): string {
+  return new Intl.NumberFormat("id-ID").format(value);
+}

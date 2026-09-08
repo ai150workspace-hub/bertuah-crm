@@ -275,3 +275,48 @@ export async function getCatatanLapangan(
       namaKonsumen: r.contacts?.nama ?? "—",
     }));
 }
+
+// ---------------------------------------------------------------------
+// Status Database (Semua Waktu) - snapshot kumulatif, SENGAJA tidak terikat
+// filter tanggal Dashboard dan TIDAK digabung ke query Funnel Pipeline di
+// atas, walau sama-sama soal jumlah kontak. data_batches.total_rows
+// kumulatif sepanjang waktu; contacts bisa berkurang efeknya (DNC/hapus),
+// jadi dua totalnya boleh beda - itu informasi, bukan bug (lihat
+// DatabaseStatusCard.tsx).
+// ---------------------------------------------------------------------
+
+export interface DatabaseStatusSnapshot {
+  /** false kalau data_batches belum pernah punya baris sama sekali - tampilkan state kosong, bukan 0. */
+  adaRiwayatUpload: boolean;
+  totalUploaded: number;
+  sudahDikerjakan: number;
+  belumDisentuh: number;
+  totalSaatIni: number;
+}
+
+export async function getDatabaseStatusSnapshot(
+  supabase: SupabaseClient
+): Promise<DatabaseStatusSnapshot> {
+  const [{ data: completedBatches }, { count: batchTotalCount }, { count: totalSaatIni }, { count: belumDisentuh }] =
+    await Promise.all([
+      supabase.from("data_batches").select("total_rows").eq("status", "Completed"),
+      supabase.from("data_batches").select("*", { count: "exact", head: true }),
+      supabase.from("contacts").select("*", { count: "exact", head: true }),
+      supabase.from("contacts").select("*", { count: "exact", head: true }).eq("status_call", "Uncalled"),
+    ]);
+
+  const totalUploaded = (completedBatches ?? []).reduce(
+    (sum, b) => sum + ((b as { total_rows: number | null }).total_rows ?? 0),
+    0
+  );
+  const total = totalSaatIni ?? 0;
+  const belum = belumDisentuh ?? 0;
+
+  return {
+    adaRiwayatUpload: (batchTotalCount ?? 0) > 0,
+    totalUploaded,
+    sudahDikerjakan: total - belum,
+    belumDisentuh: belum,
+    totalSaatIni: total,
+  };
+}

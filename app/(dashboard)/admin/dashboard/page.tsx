@@ -16,11 +16,16 @@ import { AgentPerformanceTable } from "@/components/admin/agent-performance-tabl
 import { DateRangeFilter } from "@/components/admin/date-range-filter";
 import { StatusCallSummary } from "@/components/admin/StatusCallSummary";
 import { CatatanLapangan } from "@/components/admin/CatatanLapangan";
+import { DatabaseStatusCard } from "@/components/admin/DatabaseStatusCard";
 import { IncentiveCalculator } from "@/components/admin/IncentiveCalculator";
 import { formatCompactRupiah, formatPercent } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getAdminDashboardData, getCatatanLapangan } from "@/lib/admin-metrics";
+import {
+  getAdminDashboardData,
+  getCatatanLapangan,
+  getDatabaseStatusSnapshot,
+} from "@/lib/admin-metrics";
 import { todayWib, startOfMonthWib } from "@/lib/wib-date";
 
 // recharts cukup besar - dipisah jadi chunk sendiri, bukan ikut bundle
@@ -54,14 +59,17 @@ export default async function AdminDashboardPage({
       : todayYear!;
 
   const supabase = await createClient();
-  // Query agregasi (breakdown) & query list (catatan) dijalankan terpisah -
-  // dua panggilan Supabase independen, bukan satu query gabungan kompleks.
+  // Query agregasi (breakdown), query list (catatan), dan snapshot Status
+  // Database (all-time, tidak terikat filter tanggal) dijalankan terpisah -
+  // tiga panggilan Supabase independen, bukan satu query gabungan kompleks.
   const [
     { databaseTotal, kpi, funnel, agents, statusCallBreakdown, statusCallBelumTercatat },
     catatanLapangan,
+    databaseStatus,
   ] = await Promise.all([
     getAdminDashboardData(supabase, { from, to }),
     getCatatanLapangan(supabase, { from, to }),
+    getDatabaseStatusSnapshot(supabase),
   ]);
 
   return (
@@ -104,6 +112,8 @@ export default async function AdminDashboardPage({
           tone="success"
         />
       </div>
+
+      <DatabaseStatusCard snapshot={databaseStatus} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
