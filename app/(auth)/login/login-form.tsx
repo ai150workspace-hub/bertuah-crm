@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
-import { ShieldCheck, Loader2 } from "lucide-react";
+import { useActionState, useState } from "react";
+import { ShieldCheck, Loader2, Eye, EyeOff } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -20,6 +20,7 @@ const initialState: SignInState = {};
 
 export function LoginForm() {
   const [state, formAction, pending] = useActionState(signIn, initialState);
+  const [showPassword, setShowPassword] = useState(false);
 
   return (
     <div className="w-full max-w-sm space-y-6">
@@ -57,14 +58,26 @@ export function LoginForm() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="••••••••"
-                autoComplete="current-password"
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  required
+                  className="pr-9"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  tabIndex={-1}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             {state?.error && (
