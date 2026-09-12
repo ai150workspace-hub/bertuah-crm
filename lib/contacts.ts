@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Contact, StatusCall, VehicleType } from "@/types";
 import type { ActiveSlotsInfo } from "@/components/agent/QueueTable";
 import { createServiceRoleClient } from "@/lib/supabase/service";
+import { todayWib, wibDayEndIso } from "@/lib/wib-date";
 
 /** Raw shape selected from public.contacts. */
 export interface ContactRow {
@@ -139,4 +140,25 @@ export async function markPreviousCallFlags(
     .neq("agent_id", currentAgentId);
   const flagged = new Set((data ?? []).map((r) => r.contact_id as string));
   return contacts.map((c) => ({ ...c, hasPreviousCalls: flagged.has(c.id) }));
+}
+
+/**
+ * Jumlah kontak yang follow-up-nya jatuh tempo (hari ini atau sudah
+ * terlambat) - badge sidebar "Antrean Saya". Definisi "jatuh tempo" sama
+ * dengan filter "due" di app/(dashboard)/agent/queue/page.tsx - kalau
+ * salah satu diubah, ubah juga yang satunya. Cuma ambil angka (bukan
+ * baris), sama seperti getReengagementCount() di lib/reengagement.ts.
+ */
+export async function getDueFollowUpCount(
+  supabase: SupabaseClient,
+  agentId: string
+): Promise<number> {
+  const { count } = await supabase
+    .from("contacts")
+    .select("*", { count: "exact", head: true })
+    .eq("assigned_to", agentId)
+    .in("status_call", ["Uncalled", "In Progress", "Warm", "Hot Lead"])
+    .not("next_follow_up_at", "is", null)
+    .lte("next_follow_up_at", wibDayEndIso(todayWib()));
+  return count ?? 0;
 }

@@ -28,7 +28,7 @@ export interface NavItem {
 
 export const AGENT_NAV: NavItem[] = [
   { label: "Dashboard", href: "/agent/dashboard", icon: LayoutDashboard },
-  { label: "Antrean Saya", href: "/agent/queue", icon: Users },
+  { label: "Antrean Saya", href: "/agent/queue", icon: Users, badgeKey: "dueFollowUp" },
   { label: "Aplikasi Saya", href: "/agent/applications", icon: FileStack },
   { label: "Performa Saya", href: "/agent/performance", icon: BarChart3 },
   {

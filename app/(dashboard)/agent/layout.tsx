@@ -4,6 +4,7 @@ import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { getCurrentUser } from "@/lib/auth";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { getReengagementCount } from "@/lib/reengagement";
+import { getDueFollowUpCount } from "@/lib/contacts";
 import type { AppUser } from "@/types";
 
 // Badge sidebar "Follow-up Ulang" dibaca di layout, yang jalan di SETIAP
@@ -29,6 +30,17 @@ const getCachedReengagementCount = unstable_cache(
   { revalidate: 60 }
 );
 
+// Badge sidebar "Antrean Saya" (jumlah follow-up jatuh tempo) - pola cache
+// PERSIS sama seperti getCachedReengagementCount di atas, alasan yang sama.
+const getCachedDueFollowUpCount = unstable_cache(
+  async (agentId: string) => {
+    const supabase = createServiceRoleClient();
+    return getDueFollowUpCount(supabase, agentId);
+  },
+  ["agent-due-followup-badge-count"],
+  { revalidate: 60 }
+);
+
 export default async function AgentLayout({ children }: LayoutProps<"/agent">) {
   const profile = await getCurrentUser();
   if (!profile) redirect("/login");
@@ -41,14 +53,17 @@ export default async function AgentLayout({ children }: LayoutProps<"/agent">) {
     active: profile.isActive,
   };
 
-  const reengagementCount = await getCachedReengagementCount(profile.id);
+  const [reengagementCount, dueFollowUpCount] = await Promise.all([
+    getCachedReengagementCount(profile.id),
+    getCachedDueFollowUpCount(profile.id),
+  ]);
 
   return (
     <DashboardShell
       role="agent"
       roleLabel="Agent Workspace"
       user={appUser}
-      badgeCounts={{ reengagement: reengagementCount }}
+      badgeCounts={{ reengagement: reengagementCount, dueFollowUp: dueFollowUpCount }}
     >
       {children}
     </DashboardShell>

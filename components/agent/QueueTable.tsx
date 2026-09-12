@@ -42,6 +42,7 @@ const MAX_CLAIM_BATCH_SIZE = 50;
 // default "aktif" di app/(dashboard)/agent/queue/page.tsx).
 const STATUS_FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: "aktif", label: "Aktif" },
+  { value: "due", label: "Jatuh Tempo" },
   { value: "Uncalled", label: "Uncalled" },
   { value: "In Progress", label: "In Progress" },
   { value: "Warm", label: "Warm" },

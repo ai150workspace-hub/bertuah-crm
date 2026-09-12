@@ -11,6 +11,7 @@ import {
 import { getCapabilities } from "@/lib/telephony/provider";
 import { getActiveScriptContent } from "@/lib/scripts";
 import { getWaTemplate } from "@/lib/wa-templates";
+import { todayWib, wibDayEndIso } from "@/lib/wib-date";
 
 const PAGE_SIZE = 25;
 // Status yang masih perlu ditindaklanjuti - dipakai filter "aktif".
@@ -20,6 +21,7 @@ const ACTIVE_STATUSES = ["Uncalled", "In Progress", "Warm", "Hot Lead"];
 // / tanpa filter sama sekali).
 const ACCEPTED_STATUS_VALUES = [
   "aktif",
+  "due",
   "all",
   "Uncalled",
   "In Progress",
@@ -55,7 +57,12 @@ export default async function AgentQueuePage({
   const sort: SortKey =
     typeof sortParam === "string" && (SORT_KEYS as readonly string[]).includes(sortParam)
       ? (sortParam as SortKey)
-      : "updated";
+      // Filter "Jatuh Tempo" tanpa ?sort= eksplisit -> paling terlambat di
+      // atas. Kalau agen memilih sort lain, itu sudah ditangkap cabang di
+      // atas (tidak pernah sampai sini).
+      : status === "due"
+        ? "followup"
+        : "updated";
   const page = typeof pageParam === "string" && Number(pageParam) > 0 ? Number(pageParam) : 1;
 
   let contacts: ReturnType<typeof mapDbContact>[] = [];
@@ -77,6 +84,14 @@ export default async function AgentQueuePage({
 
     if (status === "aktif") {
       query = query.in("status_call", ACTIVE_STATUSES);
+    } else if (status === "due") {
+      // Jatuh tempo = follow-up hari ini ATAU sudah terlambat, cuma untuk
+      // status yang masih bisa ditindaklanjuti (sama seperti getDueFollowUpCount
+      // di lib/contacts.ts - kalau salah satu diubah, ubah juga yang satunya).
+      query = query
+        .in("status_call", ACTIVE_STATUSES)
+        .not("next_follow_up_at", "is", null)
+        .lte("next_follow_up_at", wibDayEndIso(todayWib()));
     } else if (status !== "all") {
       query = query.eq("status_call", status);
     }
