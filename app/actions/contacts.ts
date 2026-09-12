@@ -11,7 +11,11 @@ export interface ContactsActionResult {
   warning?: string;
 }
 
-const HARD_CEILING = 70;
+// Samakan dengan hard ceiling di assign_contacts_to_agent()/
+// get_agent_active_slots() (lihat 0022_active_slot_today_only.sql) -
+// sebelumnya nilai ini sendiri masih 70, tertinggal saat batas dinaikkan
+// ke 150 di 0014_capacity_recycled_cap.sql.
+const HARD_CEILING = 150;
 
 /** Session client hanya dipakai untuk verifikasi siapa yang memanggil. */
 async function requireAdmin(): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -52,8 +56,9 @@ export async function assignContacts(
     .maybeSingle();
   if (!agent) return { success: false, error: "Agent tujuan tidak ditemukan." };
 
-  // Active slots (Uncalled + In Progress + Warm) - Invalid/Hot Lead/Closed
-  // tidak dihitung. Lihat 0010_active_slot_capacity.sql.
+  // Active slots = Uncalled + (In Progress/Warm yang butuh dikerjakan HARI
+  // INI - terakhir dihubungi hari ini atau follow-up jatuh tempo). Invalid/
+  // Hot Lead/Closed tidak dihitung. Lihat 0022_active_slot_today_only.sql.
   const { data: slotsRows, error: slotsError } = await service.rpc("get_agent_active_slots", {
     p_agent_id: agentId,
   });

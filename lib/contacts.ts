@@ -41,7 +41,12 @@ export function mapDbContact(row: ContactRow): Contact {
 export const CONTACT_SELECT =
   "id, nama, no_hp, jenis_kendaraan, merk_tipe, tahun, domisili, status_pajak, status_call, status_prospek, assigned_to, last_contacted_at, next_follow_up_at";
 
-/** Slot aktif (Uncalled + In Progress + Warm) - lihat 0010_active_slot_capacity.sql. */
+/**
+ * Slot aktif = Uncalled + (In Progress/Warm yang butuh dikerjakan HARI
+ * INI). Lihat public.is_contact_active_today() di
+ * 0022_active_slot_today_only.sql - dipakai buat state tombol "Ambil
+ * Data Baru" dan angka kapasitas yang ditampilkan.
+ */
 export async function getActiveSlots(
   supabase: SupabaseClient,
   agentId: string
@@ -71,6 +76,14 @@ export interface AgentCapacityInfo {
  * sekaligus - satu query total, bukan satu query per agen (N+1).
  * Dipakai bareng oleh admin/contacts/page.tsx dan app/actions/import.ts
  * yang sebelumnya masing-masing punya implementasi N+1 sendiri.
+ *
+ * SENGAJA BEDA dari getActiveSlots()/get_agent_active_slots() - fungsi
+ * itu sejak 0022_active_slot_today_only.sql cuma hitung In Progress/Warm
+ * yang jatuh tempo HARI INI (dipakai tombol self-claim + assign manual
+ * admin). Di sini tetap hitung SELURUH backlog tanpa lihat tanggal,
+ * karena dipakai auto-distribusi saat import CSV - supaya import tidak
+ * menumpuk data baru ke agent yang sebenarnya masih banyak follow-up
+ * tertunda, walau belum jatuh tempo hari ini.
  */
 export async function getAgentCapacitiesBulk(
   supabase: SupabaseClient,
