@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { formatDistanceToNow } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { Phone, Plus, Search, ChevronLeft, ChevronRight } from "lucide-react";
@@ -33,11 +34,10 @@ import type { ScriptContentRow } from "@/lib/scripts";
 import type { ProviderCapabilities } from "@/lib/telephony/types";
 import { todayWib, wibDateFromIso, formatDateID } from "@/lib/wib-date";
 
-const FULL_PAGE_SIZE = 25;
 const DEFAULT_CLAIM_BATCH_SIZE = 50;
 const MAX_CLAIM_BATCH_SIZE = 50;
 const FILTERABLE_STATUSES: StatusCall[] = ["Uncalled", "In Progress", "Warm", "Hot Lead"];
-type SortKey = "updated" | "nama" | "status" | "followup";
+export type SortKey = "updated" | "nama" | "status" | "followup";
 
 const SORT_LABEL: Record<SortKey, string> = {
   updated: "Last Updated",
@@ -83,8 +83,19 @@ function capacityBarColor(activeCount: number, kapasitas: number): string {
 }
 
 /**
- * Dipakai di dua tempat: versi ringkas di Dashboard (compact) dan versi
- * halaman penuh di /agent/queue (filter + sort + pagination aktif).
+ * Dipakai di dua tempat:
+ * - compact=true (preview di Dashboard) - `contacts` array kecil yang sudah
+ *   dibatasi caller, search difilter lokal di browser (instan, tanpa filter/
+ *   sort/pagination UI).
+ * - compact=false (halaman penuh /agent/queue) - `contacts` SUDAH difilter,
+ *   diurutkan, dan dipotong per halaman DI SERVER (q/statusFilter/sortKey/
+ *   page adalah state URL, bukan state lokal) - lihat
+ *   app/(dashboard)/agent/queue/page.tsx. Component ini TIDAK menyaring/
+ *   mengurutkan ulang `contacts` untuk mode ini - apa yang diterima dari
+ *   props itulah yang ditampilkan apa adanya. Sengaja begini (bukan fetch-
+ *   semua-lalu-filter-di-client) supaya tidak ada batas total kontak yang
+ *   bisa "kepotong" seperti bug sebelumnya - berapa pun besar riwayat
+ *   kontak seorang agen, cuma 1 halaman yang pernah ditarik sekaligus.
  */
 export function QueueTable({
   contacts,
@@ -93,6 +104,11 @@ export function QueueTable({
   agentStatus,
   compact = false,
   totalCount,
+  q = "",
+  statusFilter = "all",
+  sortKey = "updated",
+  page = 1,
+  pageSize = 25,
   scripts,
   agentId,
   agentCreatedAt,
@@ -103,8 +119,14 @@ export function QueueTable({
   activeSlots?: ActiveSlotsInfo | null;
   agentStatus?: "active" | "pause" | "inactive";
   compact?: boolean;
-  /** Total lead sesungguhnya - beda dari contacts.length kalau `contacts` cuma cuplikan (mis. preview di Dashboard). Default contacts.length. */
+  /** Total lead sesungguhnya sesuai filter aktif - beda dari contacts.length kalau `contacts` cuma cuplikan (mis. preview di Dashboard, atau 1 halaman dari server). Default contacts.length. */
   totalCount?: number;
+  /** Full mode saja (state URL, lihat page.tsx) - diabaikan kalau compact. */
+  q?: string;
+  statusFilter?: string;
+  sortKey?: SortKey;
+  page?: number;
+  pageSize?: number;
   /** Diteruskan ke CustomerDrawer untuk panel panduan script - lihat components/agent/ScriptSidebar.tsx. */
   scripts?: ScriptContentRow[];
   agentId?: string;
@@ -112,45 +134,46 @@ export function QueueTable({
   initialFollowupTemplate?: string | null;
 }) {
   const router = useRouter();
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sortKey, setSortKey] = useState<SortKey>("updated");
-  const [page, setPage] = useState(1);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Search lokal - CUMA dipakai mode compact (filter instan di atas array
+  // kecil yang sudah diberi caller). Mode full pakai form submit -> URL
+  // (lihat `apply()` di bawah), sama seperti ContactsFilterBar/
+  // ActivityLogTable, supaya pencarian benar-benar jalan di server (bukan
+  // cuma mencari di dalam 1 halaman yang kebetulan sedang tampil).
+  const [compactSearch, setCompactSearch] = useState("");
+
   const [selected, setSelected] = useState<Contact | null>(null);
   const [open, setOpen] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [batchSize, setBatchSize] = useState(DEFAULT_CLAIM_BATCH_SIZE);
   const [lastClaimResult, setLastClaimResult] = useState<string | null>(null);
 
-  let filtered = contacts.filter((c) =>
-    `${c.nama} ${c.noHp}`.toLowerCase().includes(search.toLowerCase())
-  );
-
-  if (!compact && statusFilter !== "all") {
-    filtered = filtered.filter((c) => c.statusCall === statusFilter);
+  function apply(next: Record<string, string>) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(next)) {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    }
+    if (!("page" in next)) params.delete("page"); // filter berubah -> balik ke halaman 1
+    router.push(`${pathname}?${params.toString()}`);
   }
 
-  if (!compact) {
-    filtered = [...filtered].sort((a, b) => {
-      if (sortKey === "nama") return a.nama.localeCompare(b.nama);
-      if (sortKey === "status") return a.statusCall.localeCompare(b.statusCall);
-      if (sortKey === "followup") {
-        // Belum ada jadwal ditaruh paling belakang - bukan prioritas.
-        const av = a.nextFollowUpAt ?? "9999-12-31";
-        const bv = b.nextFollowUpAt ?? "9999-12-31";
-        return av.localeCompare(bv);
-      }
-      const at = a.lastContactedAt ? new Date(a.lastContactedAt).getTime() : 0;
-      const bt = b.lastContactedAt ? new Date(b.lastContactedAt).getTime() : 0;
-      return bt - at;
-    });
+  function hrefForPage(p: number) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("page", String(p));
+    return `${pathname}?${params.toString()}`;
   }
 
-  const totalPages = compact ? 1 : Math.max(1, Math.ceil(filtered.length / FULL_PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
   const pageItems = compact
-    ? filtered
-    : filtered.slice((currentPage - 1) * FULL_PAGE_SIZE, currentPage * FULL_PAGE_SIZE);
+    ? contacts.filter((c) =>
+        `${c.nama} ${c.noHp}`.toLowerCase().includes(compactSearch.toLowerCase())
+      )
+    : contacts;
+
+  const effectiveTotal = totalCount ?? contacts.length;
+  const totalPages = compact ? 1 : Math.max(1, Math.ceil(effectiveTotal / pageSize));
 
   async function handleClaim() {
     setClaiming(true);
@@ -182,7 +205,7 @@ export function QueueTable({
         <div>
           <h3 className="font-semibold">Antrean Saya</h3>
           <p className="text-sm text-muted-foreground">
-            {totalCount ?? contacts.length} lead dalam antrean kamu
+            {effectiveTotal} lead dalam antrean kamu
           </p>
           {activeSlots && (
             <div className="mt-1.5 flex items-center gap-2">
@@ -209,24 +232,40 @@ export function QueueTable({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Cari nama / no HP..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 w-full sm:w-56"
-            />
-          </div>
+          {compact ? (
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Cari nama / no HP..."
+                value={compactSearch}
+                onChange={(e) => setCompactSearch(e.target.value)}
+                className="pl-8 w-full sm:w-56"
+              />
+            </div>
+          ) : (
+            <form
+              className="relative"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const input = e.currentTarget.elements.namedItem("q") as HTMLInputElement;
+                apply({ q: input.value });
+              }}
+            >
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                name="q"
+                defaultValue={q}
+                placeholder="Cari nama / no HP..."
+                className="pl-8 w-full sm:w-56"
+              />
+            </form>
+          )}
 
           {!compact && (
             <>
               <Select
                 value={statusFilter}
-                onValueChange={(v) => {
-                  setStatusFilter(v ?? "all");
-                  setPage(1);
-                }}
+                onValueChange={(v) => apply({ status: v && v !== "all" ? v : "" })}
               >
                 <SelectTrigger className="w-40">
                   <SelectValue>
@@ -243,7 +282,10 @@ export function QueueTable({
                 </SelectContent>
               </Select>
 
-              <Select value={sortKey} onValueChange={(v) => setSortKey((v as SortKey) ?? "updated")}>
+              <Select
+                value={sortKey}
+                onValueChange={(v) => apply({ sort: (v as SortKey) ?? "updated" })}
+              >
                 <SelectTrigger className="w-40">
                   <SelectValue>
                     {(v: string | null) => `Urut: ${SORT_LABEL[(v as SortKey) ?? "updated"]}`}
@@ -411,25 +453,31 @@ export function QueueTable({
       {!compact && totalPages > 1 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
-            Halaman {currentPage} dari {totalPages}
+            Halaman {page} dari {totalPages}
           </span>
           <div className="flex gap-2">
             <Button
               size="sm"
               variant="outline"
-              disabled={currentPage <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              <ChevronLeft className="h-3.5 w-3.5" /> Sebelumnya
-            </Button>
+              disabled={page <= 1}
+              nativeButton={false}
+              render={
+                <Link href={hrefForPage(Math.max(1, page - 1))}>
+                  <ChevronLeft className="h-3.5 w-3.5" /> Sebelumnya
+                </Link>
+              }
+            />
             <Button
               size="sm"
               variant="outline"
-              disabled={currentPage >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            >
-              Berikutnya <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
+              disabled={page >= totalPages}
+              nativeButton={false}
+              render={
+                <Link href={hrefForPage(Math.min(totalPages, page + 1))}>
+                  Berikutnya <ChevronRight className="h-3.5 w-3.5" />
+                </Link>
+              }
+            />
           </div>
         </div>
       )}
