@@ -243,7 +243,8 @@ export function QueueTable({
           )}
           {activeSlots && (
             <p className="text-[11px] text-muted-foreground/70">
-              Uncalled + In Progress + Warm dihitung · Invalid &amp; Hot Lead tidak
+              Dihitung: belum ditelepon, ditelepon hari ini, atau follow-up jatuh tempo ·
+              Tidak dihitung: Hot Lead, Closed, Invalid
             </p>
           )}
         </div>
