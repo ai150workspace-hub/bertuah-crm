@@ -13,7 +13,21 @@ import { getActiveScriptContent } from "@/lib/scripts";
 import { getWaTemplate } from "@/lib/wa-templates";
 
 const PAGE_SIZE = 25;
-const FILTERABLE_STATUSES = ["Uncalled", "In Progress", "Warm", "Hot Lead"];
+// Status yang masih perlu ditindaklanjuti - dipakai filter "aktif".
+const ACTIVE_STATUSES = ["Uncalled", "In Progress", "Warm", "Hot Lead"];
+// Semua nilai yang diterima dari parameter URL ?status=. "aktif" dan "all"
+// bukan nilai kolom status_call, tapi mode filter (gabungan beberapa status
+// / tanpa filter sama sekali).
+const ACCEPTED_STATUS_VALUES = [
+  "aktif",
+  "all",
+  "Uncalled",
+  "In Progress",
+  "Warm",
+  "Hot Lead",
+  "Invalid",
+  "Closed",
+];
 const SORT_KEYS = ["updated", "nama", "status", "followup"] as const;
 type SortKey = (typeof SORT_KEYS)[number];
 
@@ -30,9 +44,13 @@ export default async function AgentQueuePage({
   const pageParam = params.page;
 
   const status =
-    typeof statusParam === "string" && FILTERABLE_STATUSES.includes(statusParam)
+    typeof statusParam === "string" && ACCEPTED_STATUS_VALUES.includes(statusParam)
       ? statusParam
-      : "all";
+      // Default "aktif", bukan "all" - status yang sudah final (Invalid/
+      // Closed) tidak bisa ditindaklanjuti lagi, jadi tidak perlu memenuhi
+      // antrean kerja harian secara default. "all" tetap bisa dipilih
+      // manual lewat dropdown/URL kalau memang perlu lihat semua.
+      : "aktif";
   const q = typeof qParam === "string" ? qParam : "";
   const sort: SortKey =
     typeof sortParam === "string" && (SORT_KEYS as readonly string[]).includes(sortParam)
@@ -57,7 +75,11 @@ export default async function AgentQueuePage({
       .select(CONTACT_SELECT, { count: "exact" })
       .eq("assigned_to", profile.id);
 
-    if (status !== "all") query = query.eq("status_call", status);
+    if (status === "aktif") {
+      query = query.in("status_call", ACTIVE_STATUSES);
+    } else if (status !== "all") {
+      query = query.eq("status_call", status);
+    }
     if (q.trim()) {
       const needle = q.trim();
       query = query.or(`nama.ilike.%${needle}%,no_hp.ilike.%${needle}%`);

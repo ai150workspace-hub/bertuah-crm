@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { Contact, StatusCall } from "@/types";
+import type { Contact } from "@/types";
 import { STATUS_CALL_COLORS } from "@/lib/status-colors";
 import { claimLeads } from "@/app/actions/leads";
 import { CustomerDrawer } from "./customer-drawer";
@@ -36,7 +36,23 @@ import { todayWib, wibDateFromIso, formatDateID } from "@/lib/wib-date";
 
 const DEFAULT_CLAIM_BATCH_SIZE = 50;
 const MAX_CLAIM_BATCH_SIZE = 50;
-const FILTERABLE_STATUSES: StatusCall[] = ["Uncalled", "In Progress", "Warm", "Hot Lead"];
+// Urutan & label dropdown filter status - "Aktif" (gabungan status yang
+// masih perlu ditindaklanjuti) di paling atas karena itu defaultnya,
+// "Semua Status" di paling bawah karena jarang dipakai (lihat komentar
+// default "aktif" di app/(dashboard)/agent/queue/page.tsx).
+const STATUS_FILTER_OPTIONS: { value: string; label: string }[] = [
+  { value: "aktif", label: "Aktif" },
+  { value: "Uncalled", label: "Uncalled" },
+  { value: "In Progress", label: "In Progress" },
+  { value: "Warm", label: "Warm" },
+  { value: "Hot Lead", label: "Hot Lead" },
+  { value: "Invalid", label: "Invalid" },
+  { value: "Closed", label: "Closed" },
+  { value: "all", label: "Semua Status" },
+];
+const STATUS_FILTER_LABEL: Record<string, string> = Object.fromEntries(
+  STATUS_FILTER_OPTIONS.map((o) => [o.value, o.label])
+);
 export type SortKey = "updated" | "nama" | "status" | "followup";
 
 const SORT_LABEL: Record<SortKey, string> = {
@@ -105,7 +121,7 @@ export function QueueTable({
   compact = false,
   totalCount,
   q = "",
-  statusFilter = "all",
+  statusFilter = "aktif",
   sortKey = "updated",
   page = 1,
   pageSize = 25,
@@ -265,18 +281,21 @@ export function QueueTable({
             <>
               <Select
                 value={statusFilter}
-                onValueChange={(v) => apply({ status: v && v !== "all" ? v : "" })}
+                // Selalu tulis nilai literal (termasuk "aktif" dan "all") -
+                // JANGAN dihapus dari URL kalau "all" dipilih, karena
+                // default sekarang "aktif", bukan "all" (menghapus param
+                // akan salah balik ke "aktif").
+                onValueChange={(v) => apply({ status: v ?? "aktif" })}
               >
                 <SelectTrigger className="w-40">
                   <SelectValue>
-                    {(v: string | null) => (v === "all" || !v ? "Semua Status" : v)}
+                    {(v: string | null) => STATUS_FILTER_LABEL[v ?? "aktif"] ?? v}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Semua Status</SelectItem>
-                  {FILTERABLE_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
+                  {STATUS_FILTER_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
