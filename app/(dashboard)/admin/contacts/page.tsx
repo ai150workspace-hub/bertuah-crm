@@ -8,8 +8,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getAgentCapacitiesBulk } from "@/lib/contacts";
 
 const PAGE_SIZE = 50;
-const DEFAULT_STATUSES = ["Uncalled", "Hot Lead", "Warm", "In Progress"];
-const ALL_STATUSES = ["Uncalled", "Hot Lead", "Warm", "In Progress", "Closed", "Invalid"];
+const DEFAULT_STATUSES = ["Uncalled", "Inbound", "Hot Lead", "Warm", "In Progress"];
+const ALL_STATUSES = ["Uncalled", "Inbound", "Hot Lead", "Warm", "In Progress", "Closed", "Invalid"];
 
 export default async function AdminContactsPage({
   searchParams,

@@ -320,3 +320,29 @@ export async function getDatabaseStatusSnapshot(
     totalSaatIni: total,
   };
 }
+
+// ---------------------------------------------------------------------
+// Lead dari Website - juga all-time/tidak terikat filter tanggal Dashboard,
+// query terpisah sendiri. status_call = 'Inbound' berarti lead itu masuk
+// dari form web dan BELUM PERNAH disentuh sama sekali (begitu ada yang
+// menelepon, statusnya naik jadi 'In Progress' - lihat migrasi 0018) -
+// jadi angka ini murni "butuh tindak lanjut pertama kali".
+// ---------------------------------------------------------------------
+
+export interface WebLeadsSnapshot {
+  total: number;
+  belumDiAssign: number;
+}
+
+export async function getWebLeadsSnapshot(supabase: SupabaseClient): Promise<WebLeadsSnapshot> {
+  const [{ count: total }, { count: belumDiAssign }] = await Promise.all([
+    supabase.from("contacts").select("*", { count: "exact", head: true }).eq("status_call", "Inbound"),
+    supabase
+      .from("contacts")
+      .select("*", { count: "exact", head: true })
+      .eq("status_call", "Inbound")
+      .is("assigned_to", null),
+  ]);
+
+  return { total: total ?? 0, belumDiAssign: belumDiAssign ?? 0 };
+}

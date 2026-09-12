@@ -20,7 +20,8 @@ export type StatusCall =
   | "Submitted"
   | "Rejected"
   | "Invalid"
-  | "Duplicate";
+  | "Duplicate"
+  | "Inbound";
 
 export interface Contact {
   id: string;

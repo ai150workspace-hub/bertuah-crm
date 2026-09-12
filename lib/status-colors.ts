@@ -11,6 +11,7 @@ export const STATUS_CALL_COLORS: Record<StatusCall, string> = {
   Rejected: "bg-destructive/10 text-destructive border-destructive/20",
   Invalid: "bg-muted text-muted-foreground line-through",
   Duplicate: "bg-muted text-muted-foreground",
+  Inbound: "bg-blue-50 text-blue-700 border-blue-200 font-medium",
 };
 
 export const STATUS_APLIKASI_COLORS: Record<ApplicationStatus, string> = {

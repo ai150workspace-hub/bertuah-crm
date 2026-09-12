@@ -17,6 +17,7 @@ import { DateRangeFilter } from "@/components/admin/date-range-filter";
 import { StatusCallSummary } from "@/components/admin/StatusCallSummary";
 import { CatatanLapangan } from "@/components/admin/CatatanLapangan";
 import { DatabaseStatusCard } from "@/components/admin/DatabaseStatusCard";
+import { WebLeadsCard } from "@/components/admin/WebLeadsCard";
 import { IncentiveCalculator } from "@/components/admin/IncentiveCalculator";
 import { formatCompactRupiah, formatPercent } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -25,6 +26,7 @@ import {
   getAdminDashboardData,
   getCatatanLapangan,
   getDatabaseStatusSnapshot,
+  getWebLeadsSnapshot,
 } from "@/lib/admin-metrics";
 import { todayWib, startOfMonthWib } from "@/lib/wib-date";
 
@@ -66,10 +68,12 @@ export default async function AdminDashboardPage({
     { databaseTotal, kpi, funnel, agents, statusCallBreakdown, statusCallBelumTercatat },
     catatanLapangan,
     databaseStatus,
+    webLeads,
   ] = await Promise.all([
     getAdminDashboardData(supabase, { from, to }),
     getCatatanLapangan(supabase, { from, to }),
     getDatabaseStatusSnapshot(supabase),
+    getWebLeadsSnapshot(supabase),
   ]);
 
   return (
@@ -113,7 +117,12 @@ export default async function AdminDashboardPage({
         />
       </div>
 
-      <DatabaseStatusCard snapshot={databaseStatus} />
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <DatabaseStatusCard snapshot={databaseStatus} />
+        </div>
+        <WebLeadsCard snapshot={webLeads} />
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
