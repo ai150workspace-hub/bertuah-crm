@@ -6,6 +6,7 @@ import {
   mapDbContact,
   getActiveSlots,
   markPreviousCallFlags,
+  ACTIVE_STATUSES,
   type ContactRow,
 } from "@/lib/contacts";
 import { getCapabilities } from "@/lib/telephony/provider";
@@ -14,8 +15,6 @@ import { getWaTemplate } from "@/lib/wa-templates";
 import { todayWib, wibDayEndIso } from "@/lib/wib-date";
 
 const PAGE_SIZE = 25;
-// Status yang masih perlu ditindaklanjuti - dipakai filter "aktif".
-const ACTIVE_STATUSES = ["Uncalled", "In Progress", "Warm", "Hot Lead"];
 // Semua nilai yang diterima dari parameter URL ?status=. "aktif" dan "all"
 // bukan nilai kolom status_call, tapi mode filter (gabungan beberapa status
 // / tanpa filter sama sekali).

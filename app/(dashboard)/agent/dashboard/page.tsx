@@ -4,6 +4,7 @@ import {
   TrendingUp,
   Flame,
   CalendarCheck,
+  PhoneOff,
   Wallet,
   Banknote,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import {
   mapDbContact,
   getActiveSlots,
   markPreviousCallFlags,
+  ACTIVE_STATUSES,
   type ContactRow,
 } from "@/lib/contacts";
 import { getCapabilities } from "@/lib/telephony/provider";
@@ -44,7 +46,7 @@ export default async function AgentDashboardPage() {
   const monthEndExclusive = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
 
   // Dashboard cuma butuh cuplikan kecil + angka ringkasan, BUKAN seluruh
-  // antrean - itu tugas /agent/queue. 7 query independen (tidak saling
+  // antrean - itu tugas /agent/queue. 8 query independen (tidak saling
   // butuh hasil satu sama lain) jalan bareng, bukan berurutan.
   const [
     { count: totalLeads },
@@ -54,12 +56,18 @@ export default async function AgentDashboardPage() {
     { count: readyToSurveyCount },
     { data: disbursedThisMonth },
     { count: activeAgentCount },
+    { count: invalidCount },
   ] = profile
     ? await Promise.all([
+        // "My Leads" - cuma status yang masih bisa ditindaklanjuti (sama
+        // dengan filter "aktif" di /agent/queue). Invalid/Closed tidak
+        // dihitung - itu pekerjaan yang sudah selesai selamanya, bukan
+        // beban kerja yang masih ada.
         supabase
           .from("contacts")
           .select("*", { count: "exact", head: true })
-          .eq("assigned_to", profile.id),
+          .eq("assigned_to", profile.id)
+          .in("status_call", ACTIVE_STATUSES),
         supabase
           .from("contacts")
           .select("*", { count: "exact", head: true })
@@ -69,6 +77,7 @@ export default async function AgentDashboardPage() {
           .from("contacts")
           .select(CONTACT_SELECT)
           .eq("assigned_to", profile.id)
+          .in("status_call", ACTIVE_STATUSES)
           .order("created_at", { ascending: true })
           .limit(DASHBOARD_PREVIEW_SIZE),
         // Today Calls + Contact Rate - 1 query, dipecah jadi 2 angka di JS.
@@ -96,6 +105,12 @@ export default async function AgentDashboardPage() {
           .select("*", { count: "exact", head: true })
           .eq("role", "agent")
           .eq("is_active", true),
+        // Nomor Mati / DNC - kartu KPI baru, lihat kartu "Nomor Mati / DNC" di bawah.
+        supabase
+          .from("contacts")
+          .select("*", { count: "exact", head: true })
+          .eq("assigned_to", profile.id)
+          .eq("status_call", "Invalid"),
       ])
     : [
         { count: 0 },
@@ -104,6 +119,7 @@ export default async function AgentDashboardPage() {
         { data: null },
         { count: 0 },
         { data: null },
+        { count: 0 },
         { count: 0 },
       ];
 
@@ -168,6 +184,11 @@ export default async function AgentDashboardPage() {
           label="Ready to Survey"
           value={String(readyToSurveyCount ?? 0)}
           icon={CalendarCheck}
+        />
+        <KpiCard
+          label="Nomor Mati / DNC"
+          value={String(invalidCount ?? 0)}
+          icon={PhoneOff}
         />
         <KpiCard
           label="Pencairan Bulan Ini"

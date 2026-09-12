@@ -4,6 +4,12 @@ import type { ActiveSlotsInfo } from "@/components/agent/QueueTable";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { todayWib, wibDayEndIso } from "@/lib/wib-date";
 
+// Status yang masih perlu ditindaklanjuti (belum final). Satu-satunya
+// definisi - dipakai app/(dashboard)/agent/queue/page.tsx (filter "aktif")
+// dan app/(dashboard)/agent/dashboard/page.tsx (KPI "My Leads") supaya
+// keduanya tidak pernah bisa berbeda.
+export const ACTIVE_STATUSES = ["Uncalled", "In Progress", "Warm", "Hot Lead"];
+
 /** Raw shape selected from public.contacts. */
 export interface ContactRow {
   id: string;
