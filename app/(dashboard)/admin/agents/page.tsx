@@ -138,7 +138,13 @@ export default async function AdminAgentsPage({
   // ---- Section 1: ringkasan agregat seluruh tim ----
   const assignedNonInvalid = contacts.filter((c) => c.assigned_to !== null && c.status_call !== "Invalid");
   const totalDataDiAssign = assignedNonInvalid.length;
-  const workedAll = contacts.filter((c) => c.status_call !== "Uncalled" && c.status_call !== "Invalid");
+  // assigned_to !== null wajib ada di sini juga, sama seperti totalDataDiAssign
+  // di atas - tanpa itu, kontak yang sudah dikerjakan lalu dilepas ke pool
+  // (cron auto-reshuffle) tetap terhitung di pembilang tapi hilang dari
+  // penyebut begitu terlepas, sehingga persentasenya bisa lewat 100%.
+  const workedAll = contacts.filter(
+    (c) => c.assigned_to !== null && c.status_call !== "Uncalled" && c.status_call !== "Invalid"
+  );
   const utilisasiDatabasePercent = totalDataDiAssign > 0 ? (workedAll.length / totalDataDiAssign) * 100 : 0;
 
   const totalCallPeriode = periodeLogs.length;
