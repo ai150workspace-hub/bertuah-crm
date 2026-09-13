@@ -86,7 +86,7 @@ export const HASIL_PANGGILAN = [
     grup: 'Bicara dengan orangnya',
     rpc: true,
     statusKontak: 'Closed',
-    wajib: [],
+    wajib: ['sub_alasan'],
     aksi: 'Boleh dihubungi lagi 6 bulan lagi.',
     catatanMin: 10,
     catatanKategori: 'negatif' as KategoriCatatan,
@@ -187,7 +187,28 @@ export const SUB_ALASAN_TIDAK_LAYAK = [
   { kode: 'LAINNYA',             label: 'Lainnya' },
 ] as const;
 
-export type KodeSubAlasan = (typeof SUB_ALASAN_TIDAK_LAYAK)[number]['kode'];
+/**
+ * Sub-alasan untuk TOLAK_BUTUH — 81% dari semua penolakan nyata di produksi
+ * mendarat di satu kode ini, tanpa rincian apa pun yang bisa ditindaklanjuti.
+ *
+ * Pembeda utamanya REFLEKS vs SETELAH_PENAWARAN: kalau yang banyak REFLEKS
+ * (nasabah menutup telepon sebelum sempat dijelaskan), itu soal pembuka
+ * percakapan/skrip yang perlu diperbaiki. Kalau yang banyak
+ * SETELAH_PENAWARAN (menolak setelah dengar penawaran lengkap), itu soal
+ * produk/rate yang kalah bersaing — dua akar masalah yang beda, butuh
+ * tindakan yang berlawanan, dan sebelumnya tidak bisa dibedakan sama sekali.
+ */
+export const SUB_ALASAN_TOLAK_BUTUH = [
+  { kode: 'REFLEKS',           label: 'Langsung menolak, belum sempat dijelaskan' },
+  { kode: 'SUDAH_DAPAT_DANA',  label: 'Baru dapat dana / pinjaman dari tempat lain' },
+  { kode: 'BELUM_PERLU',       label: 'Belum butuh sekarang, mungkin nanti' },
+  { kode: 'ANTI_UTANG',        label: 'Tidak mau berutang (prinsip)' },
+  { kode: 'SETELAH_PENAWARAN', label: 'Menolak setelah mendengar penawaran lengkap' },
+] as const;
+
+export type KodeSubAlasan =
+  | (typeof SUB_ALASAN_TIDAK_LAYAK)[number]['kode']
+  | (typeof SUB_ALASAN_TOLAK_BUTUH)[number]['kode'];
 
 export type StatusKontak = 'Hot Lead' | 'Warm' | 'In Progress' | 'Closed' | 'Invalid';
 

@@ -10,9 +10,9 @@ const cek=(n:string,a:unknown,b:unknown)=>{
 console.log("\n== bentuk katalog ==");
 cek("jumlah opsi = 12", HASIL_PANGGILAN.length, 12);
 cek("kode unik", new Set(semuaKode()).size, 12);
-cek("hanya TIDAK_MEMENUHI_SYARAT yang minta sub_alasan",
+cek("TOLAK_BUTUH dan TIDAK_MEMENUHI_SYARAT yang minta sub_alasan",
   HASIL_PANGGILAN.filter(h=>(h.wajib as readonly string[]).includes('sub_alasan')).map(h=>h.kode),
-  ['TIDAK_MEMENUHI_SYARAT']);
+  ['TOLAK_BUTUH','TIDAK_MEMENUHI_SYARAT']);
 cek("RPC = 7 opsi", HASIL_PANGGILAN.filter(h=>h.rpc).length, 7);
 
 console.log("\n== 13 alasan Unprospect lama tidak ada yang hilang ==");
@@ -52,6 +52,11 @@ cek("MINAT dengan simulasi + catatan lolos",
 cek("TIDAK_MEMENUHI_SYARAT tanpa sub_alasan ditolak", validasiHasil({kode:'TIDAK_MEMENUHI_SYARAT'}).valid, false);
 cek("dengan sub_alasan + catatan lolos",
   validasiHasil({kode:'TIDAK_MEMENUHI_SYARAT',subAlasan:'BPKB_MASIH_KREDIT',catatan:'BPKB masih di leasing lain'}).valid, true);
+cek("TOLAK_BUTUH tanpa sub_alasan ditolak", validasiHasil({kode:'TOLAK_BUTUH',catatan:'tidak butuh dana'}).valid, false);
+cek("TOLAK_BUTUH dengan sub_alasan + catatan lolos",
+  validasiHasil({kode:'TOLAK_BUTUH',subAlasan:'REFLEKS',catatan:'Langsung tolak sebelum dijelaskan'}).valid, true);
+cek("TOLAK_BUTUH dengan sub_alasan dari daftar lain (TIDAK_MEMENUHI_SYARAT) ditolak",
+  validasiHasil({kode:'TOLAK_BUTUH',subAlasan:'BPKB_MASIH_KREDIT',catatan:'tidak butuh dana lagi'}).valid, false);
 const besok = new Date(Date.now()+86400000).toISOString();
 cek("JANJI_TEMU tanpa tanggal ditolak", validasiHasil({kode:'JANJI_TEMU'}).valid, false);
 cek("JANJI_TEMU dengan tanggal + catatan lolos",

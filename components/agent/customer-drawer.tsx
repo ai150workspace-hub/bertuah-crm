@@ -30,12 +30,11 @@ import { toast } from "sonner";
 import type { Contact } from "@/types";
 import {
   HASIL_PANGGILAN,
-  SUB_ALASAN_TIDAK_LAYAK,
   GRUP_URUT,
   type KodeHasil,
   type KodeSubAlasan,
 } from "@/lib/call-outcome/catalog";
-import { infoHasil, validasiHasil, catatanMinLength } from "@/lib/call-outcome/derive";
+import { infoHasil, validasiHasil, catatanMinLength, daftarSubAlasan } from "@/lib/call-outcome/derive";
 import { saveCallLog, getPreviousCallHistory, type PreviousCallHistoryEntry } from "@/app/actions/call-log";
 import { telUri, normalisasiNomor } from "@/lib/telephony/phone";
 import type { ProviderCapabilities } from "@/lib/telephony/types";
@@ -287,7 +286,16 @@ export function CustomerDrawer({
 
             <div className="space-y-1.5">
               <Label className="text-xs">Hasil</Label>
-              <Select value={kode} onValueChange={(v) => setKode((v as KodeHasil) ?? "")}>
+              <Select
+                value={kode}
+                onValueChange={(v) => {
+                  setKode((v as KodeHasil) ?? "");
+                  // Ganti hasil -> sub-alasan lama tidak lagi relevan (bisa
+                  // punya kode yang berbeda arti/tidak ada sama sekali di
+                  // hasil baru) - reset supaya tidak ada nilai "nyangkut".
+                  setSubAlasan("");
+                }}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Pilih hasil panggilan">
                     {(v: string | null) => (v ? infoHasil(v as KodeHasil).label : "Pilih hasil panggilan")}
@@ -311,30 +319,25 @@ export function CustomerDrawer({
               )}
             </div>
 
-            {wajib.includes("sub_alasan") && (
+            {wajib.includes("sub_alasan") && kode && (
               <div className="space-y-1.5">
-                <Label className="text-xs">Alasan Tidak Lolos</Label>
-                <Select
-                  value={subAlasan}
-                  onValueChange={(v) => setSubAlasan((v as KodeSubAlasan) ?? "")}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Pilih alasan">
-                      {(v: string | null) =>
-                        v
-                          ? SUB_ALASAN_TIDAK_LAYAK.find((s) => s.kode === v)?.label
-                          : "Pilih alasan"
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SUB_ALASAN_TIDAK_LAYAK.map((s) => (
-                      <SelectItem key={s.kode} value={s.kode}>
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs">Alasan</Label>
+                {/* Tombol pilihan satu-klik, semua opsi langsung tampak -
+                    BUKAN dropdown bertingkat. Agen menangani ~128 kontak/hari,
+                    tiap klik tambahan untuk membuka menu itu mahal. */}
+                <div className="flex flex-wrap gap-1.5">
+                  {daftarSubAlasan(kode).map((s) => (
+                    <Button
+                      key={s.kode}
+                      type="button"
+                      size="sm"
+                      variant={subAlasan === s.kode ? "default" : "outline"}
+                      onClick={() => setSubAlasan(s.kode as KodeSubAlasan)}
+                    >
+                      {s.label}
+                    </Button>
+                  ))}
+                </div>
               </div>
             )}
 

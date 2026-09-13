@@ -8,7 +8,7 @@
 // laporanmu berhenti bisa dipercaya.
 
 import {
-  HASIL_PANGGILAN, SUB_ALASAN_TIDAK_LAYAK,
+  HASIL_PANGGILAN, SUB_ALASAN_TIDAK_LAYAK, SUB_ALASAN_TOLAK_BUTUH,
   type KodeHasil, type KodeSubAlasan, type StatusKontak, type KategoriCatatan,
 } from './catalog';
 
@@ -56,6 +56,18 @@ export function statusByKategoriCatatan(kategori: KategoriCatatan): KodeHasil[] 
   return HASIL_PANGGILAN.filter((h) => h.catatanKategori === kategori).map((h) => h.kode);
 }
 
+/**
+ * Daftar sub-alasan yang berlaku untuk satu kode hasil. Satu-satunya tempat
+ * pemetaan kode -> daftar sub-alasan didefinisikan - komponen (customer-drawer)
+ * dan validasi (validasiHasil di bawah) sama-sama memanggil ini, bukan
+ * menulis `if (kode === ...)` sendiri-sendiri.
+ */
+export function daftarSubAlasan(kode: KodeHasil): readonly { kode: string; label: string }[] {
+  if (kode === 'TIDAK_MEMENUHI_SYARAT') return SUB_ALASAN_TIDAK_LAYAK;
+  if (kode === 'TOLAK_BUTUH') return SUB_ALASAN_TOLAK_BUTUH;
+  return [];
+}
+
 export interface InputHasil {
   kode: KodeHasil;
   subAlasan?: KodeSubAlasan | null;
@@ -83,8 +95,15 @@ export function validasiHasil(input: InputHasil): HasilValidasi {
   const wajib = h.wajib as readonly string[];
 
   if (wajib.includes('sub_alasan')) {
-    const sah = SUB_ALASAN_TIDAK_LAYAK.some(s => s.kode === input.subAlasan);
-    if (!sah) error.push('Pilih alasan kenapa tidak lolos syarat.');
+    const daftar = daftarSubAlasan(input.kode);
+    const sah = daftar.some(s => s.kode === input.subAlasan);
+    if (!sah) {
+      error.push(
+        input.kode === 'TOLAK_BUTUH'
+          ? 'Pilih alasan kenapa nasabah belum butuh dana.'
+          : 'Pilih alasan kenapa tidak lolos syarat.'
+      );
+    }
   }
 
   if (wajib.includes('tanggal_followup')) {
