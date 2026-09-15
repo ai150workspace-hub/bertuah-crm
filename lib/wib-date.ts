@@ -67,6 +67,12 @@ export function wibTimeFromIso(iso: string): string {
   return `${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}`;
 }
 
+/** Jam kalender WIB (0-23) dari sebuah instant timestamptz. */
+export function wibHourFromIso(iso: string): number {
+  const shifted = new Date(new Date(iso).getTime() + WIB_OFFSET_MS);
+  return shifted.getUTCHours();
+}
+
 /** "DD Mon, HH:mm" WIB dari sebuah instant timestamptz - dipendekkan (tanpa tahun) untuk daftar padat seperti Catatan Lapangan. */
 export function formatDateTimeShortID(iso: string): string {
   const shifted = new Date(new Date(iso).getTime() + WIB_OFFSET_MS);

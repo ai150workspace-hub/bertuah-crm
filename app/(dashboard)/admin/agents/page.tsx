@@ -16,10 +16,18 @@ import { AgentsExportButton } from "@/components/admin/agents-export-button";
 import { CreateAgentDialog } from "@/components/admin/CreateAgentDialog";
 import { CreateAdminDialog } from "@/components/admin/CreateAdminDialog";
 import { AdminAccountsCard, type AdminAccountRow } from "@/components/admin/AdminAccountsCard";
+import { JamEfektifCard, type JamEfektifAgentData, type JamEfektifHourRow } from "@/components/admin/JamEfektifCard";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { formatPercent } from "@/lib/format";
-import { wibDayStartIso, wibDayEndIso, todayWib, startOfMonthWib } from "@/lib/wib-date";
+import {
+  wibDayStartIso,
+  wibDayEndIso,
+  todayWib,
+  startOfMonthWib,
+  wibDateFromIso,
+  wibHourFromIso,
+} from "@/lib/wib-date";
 import { adalahRpc } from "@/lib/call-outcome/derive";
 import { HASIL_PANGGILAN, type KodeHasil } from "@/lib/call-outcome/catalog";
 
@@ -39,6 +47,7 @@ interface CallLogPeriodeRow {
   level_1: string;
   hasil: string | null;
   timestamp: string;
+  contact_id: string;
 }
 
 interface CallLogRecentRow {
@@ -113,7 +122,7 @@ export default async function AdminAgentsPage({
     supabase.from("contacts").select("id, nama, no_hp, assigned_to, status_call"),
     supabase
       .from("call_logs")
-      .select("agent_id, level_1, hasil, timestamp")
+      .select("agent_id, level_1, hasil, timestamp, contact_id")
       .gte("timestamp", startIso)
       .lte("timestamp", endIso),
     // Cukup untuk "last activity" + 5 call log terakhir tiap agen di skala
@@ -176,6 +185,94 @@ export default async function AdminAgentsPage({
     arr.push(l);
     periodeLogsByAgent.set(l.agent_id, arr);
   }
+
+  // ---- Jam Efektif Menelepon - diturunkan dari periodeLogs yang sama di
+  // atas, tidak ada query baru. Lihat components/admin/JamEfektifCard.tsx. ----
+  const jamEfektifByAgent: JamEfektifAgentData[] = agents.map((agent) => {
+    const logs = periodeLogsByAgent.get(agent.id) ?? [];
+    const totalCall = logs.length;
+
+    if (totalCall === 0) {
+      return {
+        agentId: agent.id,
+        agentName: agent.name,
+        totalCall: 0,
+        hourly: [],
+        avgBicaraPercent: 0,
+        hariMulaiSebelum9: 0,
+        totalHariAdaPanggilan: 0,
+        jamEmasPercent: 0,
+        rataRataPercobaan: 0,
+        panggilanSore: 0,
+      };
+    }
+
+    const bicaraTotal = logs.filter((l) => l.hasil && adalahRpc(l.hasil as KodeHasil)).length;
+    const avgBicaraPercent = (bicaraTotal / totalCall) * 100;
+
+    // a) sebaran per jam (0-23) - cuma jam yang ada panggilannya yang disimpan.
+    const perJam = new Map<number, { total: number; bicara: number }>();
+    for (const l of logs) {
+      const jam = wibHourFromIso(l.timestamp);
+      const cur = perJam.get(jam) ?? { total: 0, bicara: 0 };
+      cur.total += 1;
+      if (l.hasil && adalahRpc(l.hasil as KodeHasil)) cur.bicara += 1;
+      perJam.set(jam, cur);
+    }
+    const hourly: JamEfektifHourRow[] = Array.from(perJam.entries())
+      .map(([hour, v]) => ({
+        hour,
+        total: v.total,
+        bicara: v.bicara,
+        bicaraPercent: (v.bicara / v.total) * 100,
+      }))
+      .sort((x, y) => x.hour - y.hour);
+
+    // b) jam mulai - panggilan paling awal tiap hari kalender WIB.
+    const earliestByDay = new Map<string, string>();
+    for (const l of logs) {
+      const hari = wibDateFromIso(l.timestamp);
+      const cur = earliestByDay.get(hari);
+      if (!cur || new Date(l.timestamp).getTime() < new Date(cur).getTime()) {
+        earliestByDay.set(hari, l.timestamp);
+      }
+    }
+    let hariMulaiSebelum9 = 0;
+    for (const ts of earliestByDay.values()) {
+      if (wibHourFromIso(ts) < 9) hariMulaiSebelum9 += 1;
+    }
+
+    // c) porsi jam emas (11:00-13:59 WIB) - aturan #2.
+    const jamEmasCount = logs.filter((l) => {
+      const j = wibHourFromIso(l.timestamp);
+      return j >= 11 && j <= 13;
+    }).length;
+    const jamEmasPercent = (jamEmasCount / totalCall) * 100;
+
+    // d) rata-rata percobaan - total panggilan dibagi kontak unik. ~1,0
+    // berarti nyaris tidak ada telepon ulang (aturan #3 dilanggar).
+    const kontakUnik = new Set(logs.map((l) => l.contact_id)).size;
+    const rataRataPercobaan = kontakUnik > 0 ? totalCall / kontakUnik : 0;
+
+    // e) panggilan sore (16:00-17:59 WIB) - aturan #4.
+    const panggilanSore = logs.filter((l) => {
+      const j = wibHourFromIso(l.timestamp);
+      return j === 16 || j === 17;
+    }).length;
+
+    return {
+      agentId: agent.id,
+      agentName: agent.name,
+      totalCall,
+      hourly,
+      avgBicaraPercent,
+      hariMulaiSebelum9,
+      totalHariAdaPanggilan: earliestByDay.size,
+      jamEmasPercent,
+      rataRataPercobaan,
+      panggilanSore,
+    };
+  });
 
   const recentByAgent = new Map<string, CallLogRecentRow[]>();
   for (const l of recentLogs) {
@@ -401,6 +498,8 @@ export default async function AdminAgentsPage({
         />
         <KpiCard label="Hot Lead Rate" value={formatPercent(hotLeadRate)} icon={Flame} tone="hot" />
       </div>
+
+      <JamEfektifCard agents={jamEfektifByAgent} />
 
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">Performa per Agen</h2>
