@@ -250,13 +250,13 @@ function AgentRow({ row }: { row: AgentReportRow }) {
         <TableCell>{row.sudahDikerjakan}</TableCell>
         <TableCell>{row.uncalledSisa}</TableCell>
         <TableCell className={utilisasiColor(row.utilisasiPercent)}>{pct(row.utilisasiPercent)}</TableCell>
-        <TableCell>{row.totalCall}</TableCell>
-        <TableCell>{row.connected}</TableCell>
-        <TableCell className={contactRateColor(row.contactRatePercent)}>{pct(row.contactRatePercent)}</TableCell>
         <TableCell>{row.hotLead}</TableCell>
         <TableCell>{row.warm}</TableCell>
         <TableCell>{row.closed}</TableCell>
         <TableCell className={conversionColor(row.conversionRatePercent)}>{pct(row.conversionRatePercent)}</TableCell>
+        <TableCell>{row.totalCall}</TableCell>
+        <TableCell>{row.connected}</TableCell>
+        <TableCell className={contactRateColor(row.contactRatePercent)}>{pct(row.contactRatePercent)}</TableCell>
         <TableCell>{row.aplikasiMasuk}</TableCell>
         <TableCell>{row.disbursedCount}</TableCell>
         <TableCell>{formatRupiah(row.totalPencairan)}</TableCell>
@@ -322,43 +322,59 @@ function AgentRow({ row }: { row: AgentReportRow }) {
 
 export function AgentsReportTable({ rows }: { rows: AgentReportRow[] }) {
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Agen</TableHead>
-            <TableHead>Status &amp; Kontrol</TableHead>
-            <TableHead>Status Aktif</TableHead>
-            <TableHead>Slot Aktif</TableHead>
-            <TableHead>Sudah Dikerjakan</TableHead>
-            <TableHead>Uncalled Sisa</TableHead>
-            <TableHead>Utilisasi %</TableHead>
-            <TableHead>Total Call</TableHead>
-            <TableHead>Connected</TableHead>
-            <TableHead>Contact Rate</TableHead>
-            <TableHead>Hot Lead</TableHead>
-            <TableHead>Warm</TableHead>
-            <TableHead>Closed</TableHead>
-            <TableHead>Conversion Rate</TableHead>
-            <TableHead>Aplikasi Masuk</TableHead>
-            <TableHead>Disbursed</TableHead>
-            <TableHead>Total Pencairan</TableHead>
-            <TableHead>Terakhir Call</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row) => (
-            <AgentRow key={row.agentId} row={row} />
-          ))}
-          {rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={18} className="text-center text-muted-foreground py-8">
-                Belum ada agent aktif.
-              </TableCell>
+    <div>
+      <div className="overflow-x-auto rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead colSpan={3} />
+              <TableHead colSpan={8} className="border-l text-xs font-semibold text-muted-foreground">
+                Sedang Dipegang (semua waktu)
+              </TableHead>
+              <TableHead colSpan={6} className="border-l text-xs font-semibold text-muted-foreground">
+                Hasil Kerja (periode ini)
+              </TableHead>
+              <TableHead colSpan={1} className="border-l" />
             </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            <TableRow>
+              <TableHead>Agen</TableHead>
+              <TableHead>Status &amp; Kontrol</TableHead>
+              <TableHead>Status Aktif</TableHead>
+              <TableHead>Slot Aktif</TableHead>
+              <TableHead>Sudah Dikerjakan</TableHead>
+              <TableHead>Uncalled Sisa</TableHead>
+              <TableHead>Utilisasi %</TableHead>
+              <TableHead>Hot Lead</TableHead>
+              <TableHead>Warm</TableHead>
+              <TableHead>Closed</TableHead>
+              <TableHead>Conversion Rate</TableHead>
+              <TableHead>Total Call</TableHead>
+              <TableHead>Connected</TableHead>
+              <TableHead>Contact Rate</TableHead>
+              <TableHead>Aplikasi Masuk</TableHead>
+              <TableHead>Disbursed</TableHead>
+              <TableHead>Total Pencairan</TableHead>
+              <TableHead>Terakhir Call</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row) => (
+              <AgentRow key={row.agentId} row={row} />
+            ))}
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={18} className="text-center text-muted-foreground py-8">
+                  Belum ada agent aktif.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Hasil Kerja dihitung dari panggilan dalam periode yang dipilih. Sedang Dipegang adalah
+        kontak yang ada di tangan agen saat ini, termasuk yang sebelumnya dikerjakan agen lain.
+      </p>
     </div>
   );
 }
