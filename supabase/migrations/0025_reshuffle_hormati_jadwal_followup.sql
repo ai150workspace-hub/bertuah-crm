@@ -26,8 +26,16 @@
 -- sekarang dikecualikan.
 --
 -- CATATAN: perbaikan ini SUDAH DIJALANKAN MANUAL di database produksi
--- tanggal 16 September 2026. File migrasi ini dibuat untuk MENCATAT
--- perubahan itu di riwayat migrasi — BUKAN untuk dijalankan ulang.
+-- tanggal 16 September 2026. File migrasi ini dibuat setelahnya, supaya
+-- riwayat migrasi di repo mencerminkan keadaan database yang sebenarnya
+-- — bukan untuk pertama kali menerapkan perubahan ini.
+--
+-- Aman dijalankan ulang: cron.schedule() dengan nama job yang sudah ada
+-- meng-upsert definisinya (bukan membuat duplikat, lihat komentar di
+-- bawah), jadi kalau suatu saat seluruh rangkaian migrasi dijalankan dari
+-- awal di database baru (mis. setup ulang/replika), file ini akan
+-- otomatis ikut terpasang ulang secara idempoten dan itu aman — tidak
+-- ada efek samping dari menjalankannya lebih dari satu kali.
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
