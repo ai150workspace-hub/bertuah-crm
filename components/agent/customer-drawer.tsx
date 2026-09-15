@@ -41,6 +41,7 @@ import type { ProviderCapabilities } from "@/lib/telephony/types";
 import { ScriptSidebar } from "./ScriptSidebar";
 import type { ScriptContentRow } from "@/lib/scripts";
 import { fillWaPlaceholders, type ScriptPlaceholderData } from "@/lib/script-placeholder";
+import { todayWib, addDaysWib } from "@/lib/wib-date";
 import { cn } from "@/lib/utils";
 
 const RUPIAH_PLAIN = new Intl.NumberFormat("id-ID");
@@ -70,6 +71,7 @@ export function CustomerDrawer({
   const [kode, setKode] = useState<KodeHasil | "">("");
   const [subAlasan, setSubAlasan] = useState<KodeSubAlasan | "">("");
   const [tanggalFollowup, setTanggalFollowup] = useState("");
+  const [alasanJadwalPanjang, setAlasanJadwalPanjang] = useState("");
   const [simulasiNominal, setSimulasiNominal] = useState("");
   const [simulasiTenor, setSimulasiTenor] = useState("");
   const [simulasiAngsuran, setSimulasiAngsuran] = useState("");
@@ -91,11 +93,18 @@ export function CustomerDrawer({
   const wajib = (selected?.wajib ?? []) as readonly string[];
   const catatanMin = kode ? catatanMinLength(kode) : 0;
   const catatanPanjang = notes.trim().length;
+  // Ambang batas 7 hari dari hari ini, dihitung kalender WIB lewat helper
+  // yang sudah ada (lib/wib-date.ts) - tanggalFollowup dari <input
+  // type="date"> sudah berupa tanggal kalender polos (YYYY-MM-DD), jadi
+  // dibandingkan sebagai teks langsung, tanpa hitung timezone baru.
+  const batasNormalFollowup = addDaysWib(todayWib(), 7);
+  const followupLebihDari7Hari = Boolean(tanggalFollowup) && tanggalFollowup > batasNormalFollowup;
 
   function resetForm() {
     setKode("");
     setSubAlasan("");
     setTanggalFollowup("");
+    setAlasanJadwalPanjang("");
     setSimulasiNominal("");
     setSimulasiTenor("");
     setSimulasiAngsuran("");
@@ -106,6 +115,15 @@ export function CustomerDrawer({
   async function handleSave() {
     if (!kode) {
       toast.error("Pilih dulu hasil panggilannya.");
+      return;
+    }
+
+    // Penjagaan klien dulu - jangan andalkan error database (trigger
+    // validasi_jadwal_followup_panjang, migrasi 0026) sebagai satu-satunya
+    // penjaga. Tombol Simpan juga sudah di-disable untuk kasus ini, ini
+    // lapis kedua kalau-kalau ke-submit lewat cara lain.
+    if (followupLebihDari7Hari && alasanJadwalPanjang.trim() === "") {
+      toast.error("Jadwal follow-up lebih dari 7 hari wajib disertai alasan.");
       return;
     }
 
@@ -138,6 +156,7 @@ export function CustomerDrawer({
       simulasiTenor: simulasiTenor ? Number(simulasiTenor) : null,
       simulasiAngsuran: simulasiAngsuran ? Number(simulasiAngsuran) : null,
       notes: notes || null,
+      alasanJadwalPanjang: followupLebihDari7Hari ? alasanJadwalPanjang.trim() || null : null,
     });
     setSaving(false);
 
@@ -350,6 +369,22 @@ export function CustomerDrawer({
                   onChange={(e) => setTanggalFollowup(e.target.value)}
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Normal: maksimal 7 hari. Lebih dari itu boleh, tapi harus ada alasannya.
+                </p>
+                {followupLebihDari7Hari && (
+                  <div className="space-y-1.5 pt-1">
+                    <Label className="text-xs">
+                      Alasan jadwal lebih dari 7 hari <span className="text-destructive">*wajib</span>
+                    </Label>
+                    <Textarea
+                      value={alasanJadwalPanjang}
+                      onChange={(e) => setAlasanJadwalPanjang(e.target.value)}
+                      placeholder="Contoh: nasabah minta dihubungi setelah gajian tanggal 25"
+                      rows={2}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -443,7 +478,11 @@ export function CustomerDrawer({
               </a>
             }
           />
-          <Button className="flex-1" onClick={handleSave} disabled={saving}>
+          <Button
+            className="flex-1"
+            onClick={handleSave}
+            disabled={saving || (followupLebihDari7Hari && alasanJadwalPanjang.trim() === "")}
+          >
             <Save className="h-4 w-4" /> {saving ? "Menyimpan..." : "Simpan"}
           </Button>
         </SheetFooter>

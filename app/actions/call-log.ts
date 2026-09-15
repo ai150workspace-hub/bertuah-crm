@@ -18,6 +18,8 @@ export interface SaveCallLogInput {
   /** Cicilan/bulan - opsional, diisi manual agen (tidak dihitung dari rate). */
   simulasiAngsuran?: number | null;
   notes?: string | null;
+  /** Alasan jadwal follow-up > 7 hari (WIB) - divalidasi ulang di DB (migrasi 0026). */
+  alasanJadwalPanjang?: string | null;
 }
 
 export interface SaveCallLogResult {
@@ -80,6 +82,7 @@ export async function saveCallLog(
       status_call: efek.statusKontak,
       last_contacted_at: new Date().toISOString(),
       next_follow_up_at: efek.jadwalkanPada ? efek.jadwalkanPada.toISOString() : null,
+      alasan_jadwal_panjang: input.alasanJadwalPanjang ?? null,
     })
     .eq("id", input.contactId)
     .eq("assigned_to", user.id);
