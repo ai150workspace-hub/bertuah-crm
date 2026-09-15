@@ -17,6 +17,7 @@ import { CreateAgentDialog } from "@/components/admin/CreateAgentDialog";
 import { CreateAdminDialog } from "@/components/admin/CreateAdminDialog";
 import { AdminAccountsCard, type AdminAccountRow } from "@/components/admin/AdminAccountsCard";
 import { JamEfektifCard, type JamEfektifAgentData, type JamEfektifHourRow } from "@/components/admin/JamEfektifCard";
+import { JadwalJauhCard, type JadwalJauhRow, type JadwalJauhAgentCount } from "@/components/admin/JadwalJauhCard";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllRows } from "@/lib/supabase/pagination";
 import { getCurrentUser } from "@/lib/auth";
@@ -26,6 +27,7 @@ import {
   wibDayEndIso,
   todayWib,
   startOfMonthWib,
+  addDaysWib,
   wibDateFromIso,
   wibHourFromIso,
   wibTimeFromIso,
@@ -42,6 +44,8 @@ interface ContactRow {
   no_hp: string;
   assigned_to: string | null;
   status_call: string;
+  next_follow_up_at: string | null;
+  alasan_jadwal_panjang: string | null;
 }
 
 interface CallLogPeriodeRow {
@@ -143,7 +147,7 @@ export default async function AdminAgentsPage({
     fetchAllRows<ContactRow>((from, to) =>
       supabase
         .from("contacts")
-        .select("id, nama, no_hp, assigned_to, status_call")
+        .select("id, nama, no_hp, assigned_to, status_call, next_follow_up_at, alasan_jadwal_panjang")
         .range(from, to)
     ),
   ]);
@@ -308,6 +312,37 @@ export default async function AdminAgentsPage({
       panggilanSore,
     };
   });
+
+  // ---- Jadwal Follow-up Lebih dari 7 Hari - diturunkan dari contacts yang
+  // sudah ditarik lewat fetchAllRows di atas, tidak ada query baru. Lihat
+  // components/admin/JadwalJauhCard.tsx dan migrasi 0026. ----
+  const agentNameById = new Map(agents.map((a) => [a.id, a.name]));
+  const batasJadwalJauh = addDaysWib(today, 7);
+  const STATUS_JADWAL_JAUH = new Set(["Warm", "In Progress", "Inbound"]);
+  const jadwalJauhRows: JadwalJauhRow[] = contacts
+    .filter(
+      (c) =>
+        c.next_follow_up_at !== null &&
+        wibDateFromIso(c.next_follow_up_at) > batasJadwalJauh &&
+        STATUS_JADWAL_JAUH.has(c.status_call) &&
+        c.assigned_to !== null
+    )
+    .map((c) => ({
+      contactId: c.id,
+      namaNasabah: c.nama,
+      agentName: agentNameById.get(c.assigned_to!) ?? "—",
+      tanggalFollowupWib: wibDateFromIso(c.next_follow_up_at!),
+      alasan: c.alasan_jadwal_panjang,
+    }))
+    .sort((x, y) => (x.tanggalFollowupWib < y.tanggalFollowupWib ? 1 : -1));
+
+  const jadwalJauhCountByAgent = new Map<string, number>();
+  for (const r of jadwalJauhRows) {
+    jadwalJauhCountByAgent.set(r.agentName, (jadwalJauhCountByAgent.get(r.agentName) ?? 0) + 1);
+  }
+  const jadwalJauhAgentCounts: JadwalJauhAgentCount[] = Array.from(jadwalJauhCountByAgent.entries())
+    .map(([agentName, count]) => ({ agentName, count }))
+    .sort((x, y) => y.count - x.count);
 
   const recentByAgent = new Map<string, CallLogRecentRow[]>();
   for (const l of recentLogs) {
@@ -535,6 +570,8 @@ export default async function AdminAgentsPage({
       </div>
 
       <JamEfektifCard agents={jamEfektifByAgent} />
+
+      <JadwalJauhCard rows={jadwalJauhRows} agentCounts={jadwalJauhAgentCounts} />
 
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">Performa per Agen</h2>
