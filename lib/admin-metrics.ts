@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { adalahRpc, infoHasil, statusWajibCatatan } from "@/lib/call-outcome/derive";
 import { HASIL_PANGGILAN, GRUP_URUT, type KodeHasil } from "@/lib/call-outcome/catalog";
 import { wibDayStartIso, wibDayEndIso } from "@/lib/wib-date";
+import { fetchAllRows } from "@/lib/supabase/pagination";
 
 export interface DateRange {
   /** YYYY-MM-DD, kalender WIB, inklusif. */
@@ -92,23 +93,31 @@ export async function getAdminDashboardData(
   const startIso = wibDayStartIso(range.from);
   const endIso = wibDayEndIso(range.to);
 
-  const [{ count: databaseTotal }, { data: callLogData }, { data: appData }, { data: agentData }] =
+  const [[{ count: databaseTotal }, { data: appData }, { data: agentData }], logs] =
     await Promise.all([
-      supabase.from("contacts").select("*", { count: "exact", head: true }),
-      supabase
-        .from("call_logs")
-        .select("agent_id, hasil, timestamp")
-        .gte("timestamp", startIso)
-        .lte("timestamp", endIso),
-      supabase
-        .from("applications")
-        .select(
-          "id, agent_id, status_aplikasi, nominal_pencairan, nominal_komisi_pku, created_at, date_submitted, date_survey, date_approved, date_disbursed"
-        ),
-      supabase.from("users").select("id, name").eq("role", "agent").eq("is_active", true),
+      Promise.all([
+        supabase.from("contacts").select("*", { count: "exact", head: true }),
+        supabase
+          .from("applications")
+          .select(
+            "id, agent_id, status_aplikasi, nominal_pencairan, nominal_komisi_pku, created_at, date_submitted, date_survey, date_approved, date_disbursed"
+          ),
+        supabase.from("users").select("id, name").eq("role", "agent").eq("is_active", true),
+      ]),
+      // fetchAllRows, bukan .select() polos - call_logs sudah cukup besar
+      // untuk kepotong diam-diam di batas 1.000 baris PostgREST begitu
+      // periode terpilih lebar (lihat lib/supabase/pagination.ts). Total
+      // Panggilan & Contact Rate dihitung dari array ini.
+      fetchAllRows<CallLogRow>((from, to) =>
+        supabase
+          .from("call_logs")
+          .select("agent_id, hasil, timestamp")
+          .gte("timestamp", startIso)
+          .lte("timestamp", endIso)
+          .range(from, to)
+      ),
     ]);
 
-  const logs = (callLogData ?? []) as CallLogRow[];
   const apps = (appData ?? []) as ApplicationRow[];
   const agentUsers = (agentData ?? []) as { id: string; name: string }[];
 
