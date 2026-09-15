@@ -49,6 +49,12 @@ export function JamEfektifCard({ agents }: { agents: JamEfektifAgentData[] }) {
         )}
         {agents.map((agent, i) => {
           const maxTotal = agent.hourly.reduce((m, h) => Math.max(m, h.total), 0);
+          // Aturan #1: mulai menelepon JAM 09:00 (08:40-09:00 dipakai
+          // menyiapkan daftar) - jadi "tepat waktu" itu mulai jam 09:00 atau
+          // SETELAHNYA, bukan sebelumnya. hariMulaiSebelum9 dari props itu
+          // hitungan PELANGGARAN (mulai kepagian) - dibalik di sini supaya
+          // angka yang ditampilkan match judul kartunya.
+          const mulaiTepatWaktu = agent.totalHariAdaPanggilan - agent.hariMulaiSebelum9;
 
           return (
             <div key={agent.agentId} className={cn("space-y-3", i > 0 && "border-t pt-5")}>
@@ -61,10 +67,17 @@ export function JamEfektifCard({ agents }: { agents: JamEfektifAgentData[] }) {
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <div className="space-y-0.5">
                       <div className="text-xs text-muted-foreground">Mulai Tepat Waktu</div>
-                      <div className="text-lg font-semibold tabular-nums">
-                        {agent.hariMulaiSebelum9} dari {agent.totalHariAdaPanggilan} hari
+                      <div
+                        className={cn(
+                          "text-lg font-semibold tabular-nums",
+                          mulaiTepatWaktu < agent.totalHariAdaPanggilan / 2 && "text-destructive"
+                        )}
+                      >
+                        {mulaiTepatWaktu} dari {agent.totalHariAdaPanggilan} hari
                       </div>
-                      <div className="text-[11px] text-muted-foreground">mulai sebelum 09:00</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        mulai jam 09:00 atau setelahnya
+                      </div>
                     </div>
                     <div className="space-y-0.5">
                       <div className="text-xs text-muted-foreground">Porsi Jam Emas</div>
