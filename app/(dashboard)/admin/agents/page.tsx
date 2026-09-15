@@ -27,6 +27,7 @@ import {
   startOfMonthWib,
   wibDateFromIso,
   wibHourFromIso,
+  wibTimeFromIso,
 } from "@/lib/wib-date";
 import { adalahRpc } from "@/lib/call-outcome/derive";
 import { HASIL_PANGGILAN, type KodeHasil } from "@/lib/call-outcome/catalog";
@@ -188,6 +189,16 @@ export default async function AdminAgentsPage({
 
   // ---- Jam Efektif Menelepon - diturunkan dari periodeLogs yang sama di
   // atas, tidak ada query baru. Lihat components/admin/JamEfektifCard.tsx. ----
+  // Jendela "mulai tepat waktu" (aturan #1) - HH:mm WIB, dibandingkan sebagai
+  // teks lewat wibTimeFromIso() (sudah dipad 2 digit, aman dibandingkan
+  // leksikografis). Cuma dipakai kartu "Mulai Tepat Waktu" - batang per jam
+  // dan 3 kartu lain TIDAK memakai konstanta ini.
+  const JAM_MULAI_TEPAT_AWAL = "09:00";
+  const JAM_MULAI_TEPAT_AKHIR = "09:30";
+  // Aturan jam baru berlaku mulai tanggal ini - hari SEBELUMNYA dikecualikan
+  // dari penilaian kartu "Mulai Tepat Waktu" saja.
+  const ATURAN_JAM_BERLAKU_SEJAK = "2026-09-16";
+
   const jamEfektifByAgent: JamEfektifAgentData[] = agents.map((agent) => {
     const logs = periodeLogsByAgent.get(agent.id) ?? [];
     const totalCall = logs.length;
@@ -199,8 +210,10 @@ export default async function AdminAgentsPage({
         totalCall: 0,
         hourly: [],
         avgBicaraPercent: 0,
-        hariMulaiSebelum9: 0,
-        totalHariAdaPanggilan: 0,
+        hariDinilai: 0,
+        hariTepatWaktu: 0,
+        hariTerlaluPagi: 0,
+        hariTerlambat: 0,
         jamEmasPercent: 0,
         rataRataPercobaan: 0,
         panggilanSore: 0,
@@ -228,7 +241,11 @@ export default async function AdminAgentsPage({
       }))
       .sort((x, y) => x.hour - y.hour);
 
-    // b) jam mulai - panggilan paling awal tiap hari kalender WIB.
+    // b) jam mulai - panggilan paling awal tiap hari kalender WIB, cuma
+    // dinilai sejak ATURAN_JAM_BERLAKU_SEJAK. Tiga keadaan berdasarkan jam
+    // mulai itu (HH:mm WIB): sebelum JAM_MULAI_TEPAT_AWAL -> terlalu pagi;
+    // di antara AWAL dan AKHIR (inklusif) -> tepat waktu; setelah AKHIR ->
+    // terlambat.
     const earliestByDay = new Map<string, string>();
     for (const l of logs) {
       const hari = wibDateFromIso(l.timestamp);
@@ -237,9 +254,17 @@ export default async function AdminAgentsPage({
         earliestByDay.set(hari, l.timestamp);
       }
     }
-    let hariMulaiSebelum9 = 0;
-    for (const ts of earliestByDay.values()) {
-      if (wibHourFromIso(ts) < 9) hariMulaiSebelum9 += 1;
+    let hariDinilai = 0;
+    let hariTepatWaktu = 0;
+    let hariTerlaluPagi = 0;
+    let hariTerlambat = 0;
+    for (const [hari, ts] of earliestByDay.entries()) {
+      if (hari < ATURAN_JAM_BERLAKU_SEJAK) continue;
+      hariDinilai += 1;
+      const jamMulai = wibTimeFromIso(ts);
+      if (jamMulai < JAM_MULAI_TEPAT_AWAL) hariTerlaluPagi += 1;
+      else if (jamMulai <= JAM_MULAI_TEPAT_AKHIR) hariTepatWaktu += 1;
+      else hariTerlambat += 1;
     }
 
     // c) porsi jam emas (11:00-13:59 WIB) - aturan #2.
@@ -266,8 +291,10 @@ export default async function AdminAgentsPage({
       totalCall,
       hourly,
       avgBicaraPercent,
-      hariMulaiSebelum9,
-      totalHariAdaPanggilan: earliestByDay.size,
+      hariDinilai,
+      hariTepatWaktu,
+      hariTerlaluPagi,
+      hariTerlambat,
       jamEmasPercent,
       rataRataPercobaan,
       panggilanSore,

@@ -18,8 +18,11 @@ export interface JamEfektifAgentData {
   hourly: JamEfektifHourRow[];
   /** Persen bicara rata-rata agen ini sendiri di periode ini - patokan untuk warna aksen tiap batang jam. */
   avgBicaraPercent: number;
-  hariMulaiSebelum9: number;
-  totalHariAdaPanggilan: number;
+  /** Kartu "Mulai Tepat Waktu" - cuma hari sejak aturan jam berlaku (lihat ATURAN_JAM_BERLAKU_SEJAK di page.tsx). */
+  hariDinilai: number;
+  hariTepatWaktu: number;
+  hariTerlaluPagi: number;
+  hariTerlambat: number;
   jamEmasPercent: number;
   rataRataPercobaan: number;
   panggilanSore: number;
@@ -49,12 +52,6 @@ export function JamEfektifCard({ agents }: { agents: JamEfektifAgentData[] }) {
         )}
         {agents.map((agent, i) => {
           const maxTotal = agent.hourly.reduce((m, h) => Math.max(m, h.total), 0);
-          // Aturan #1: mulai menelepon JAM 09:00 (08:40-09:00 dipakai
-          // menyiapkan daftar) - jadi "tepat waktu" itu mulai jam 09:00 atau
-          // SETELAHNYA, bukan sebelumnya. hariMulaiSebelum9 dari props itu
-          // hitungan PELANGGARAN (mulai kepagian) - dibalik di sini supaya
-          // angka yang ditampilkan match judul kartunya.
-          const mulaiTepatWaktu = agent.totalHariAdaPanggilan - agent.hariMulaiSebelum9;
 
           return (
             <div key={agent.agentId} className={cn("space-y-3", i > 0 && "border-t pt-5")}>
@@ -67,17 +64,33 @@ export function JamEfektifCard({ agents }: { agents: JamEfektifAgentData[] }) {
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <div className="space-y-0.5">
                       <div className="text-xs text-muted-foreground">Mulai Tepat Waktu</div>
-                      <div
-                        className={cn(
-                          "text-lg font-semibold tabular-nums",
-                          mulaiTepatWaktu < agent.totalHariAdaPanggilan / 2 && "text-destructive"
-                        )}
-                      >
-                        {mulaiTepatWaktu} dari {agent.totalHariAdaPanggilan} hari
-                      </div>
-                      <div className="text-[11px] text-muted-foreground">
-                        mulai jam 09:00 atau setelahnya
-                      </div>
+                      {agent.hariDinilai === 0 ? (
+                        <div className="text-sm text-muted-foreground">belum ada hari yang dinilai</div>
+                      ) : (
+                        <>
+                          <div
+                            className={cn(
+                              "text-lg font-semibold tabular-nums",
+                              agent.hariTepatWaktu < agent.hariDinilai / 2 && "text-destructive"
+                            )}
+                          >
+                            {agent.hariTepatWaktu} dari {agent.hariDinilai} hari
+                          </div>
+                          <div className="text-[11px] text-muted-foreground">
+                            mulai 09:00-09:30 · dihitung sejak 16 Sep 2026
+                          </div>
+                          {(agent.hariTerlaluPagi > 0 || agent.hariTerlambat > 0) && (
+                            <div className="text-[11px] text-muted-foreground">
+                              {[
+                                agent.hariTerlaluPagi > 0 ? `${agent.hariTerlaluPagi} terlalu pagi` : null,
+                                agent.hariTerlambat > 0 ? `${agent.hariTerlambat} terlambat` : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                     <div className="space-y-0.5">
                       <div className="text-xs text-muted-foreground">Porsi Jam Emas</div>
