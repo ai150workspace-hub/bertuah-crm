@@ -18,6 +18,7 @@ import { CreateAdminDialog } from "@/components/admin/CreateAdminDialog";
 import { AdminAccountsCard, type AdminAccountRow } from "@/components/admin/AdminAccountsCard";
 import { JamEfektifCard, type JamEfektifAgentData, type JamEfektifHourRow } from "@/components/admin/JamEfektifCard";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/supabase/pagination";
 import { getCurrentUser } from "@/lib/auth";
 import { formatPercent } from "@/lib/format";
 import {
@@ -107,40 +108,47 @@ export default async function AdminAgentsPage({
         );
 
   const [
-    { data: agentRows },
-    { data: contactRows },
-    { data: periodeLogRows },
-    { data: recentLogRows },
-    { data: appRows },
+    [{ data: agentRows }, { data: periodeLogRows }, { data: recentLogRows }, { data: appRows }],
+    contacts,
   ] = await Promise.all([
-    supabase
-      .from("users")
-      .select(
-        "id, name, kapasitas_data, agent_status, pause_started_at, pause_max_days, recycled_warm_taken_today, recycled_inprogress_taken_today, recycled_counter_date"
-      )
-      .eq("role", "agent")
-      .order("name"),
-    supabase.from("contacts").select("id, nama, no_hp, assigned_to, status_call"),
-    supabase
-      .from("call_logs")
-      .select("agent_id, level_1, hasil, timestamp, contact_id")
-      .gte("timestamp", startIso)
-      .lte("timestamp", endIso),
-    // Cukup untuk "last activity" + 5 call log terakhir tiap agen di skala
-    // tim sekarang (lihat catatan di getActiveSlots-style query lain) -
-    // diturunkan dari 1500 supaya payload lebih kecil setiap kunjungan.
-    supabase
-      .from("call_logs")
-      .select("agent_id, timestamp, hasil, call_duration, contacts(nama)")
-      .order("timestamp", { ascending: false })
-      .limit(500),
-    supabase
-      .from("applications")
-      .select("agent_id, status_aplikasi, nominal_pencairan, created_at, date_disbursed"),
+    Promise.all([
+      supabase
+        .from("users")
+        .select(
+          "id, name, kapasitas_data, agent_status, pause_started_at, pause_max_days, recycled_warm_taken_today, recycled_inprogress_taken_today, recycled_counter_date"
+        )
+        .eq("role", "agent")
+        .order("name"),
+      supabase
+        .from("call_logs")
+        .select("agent_id, level_1, hasil, timestamp, contact_id")
+        .gte("timestamp", startIso)
+        .lte("timestamp", endIso),
+      // Cukup untuk "last activity" + 5 call log terakhir tiap agen di skala
+      // tim sekarang (lihat catatan di getActiveSlots-style query lain) -
+      // diturunkan dari 1500 supaya payload lebih kecil setiap kunjungan.
+      supabase
+        .from("call_logs")
+        .select("agent_id, timestamp, hasil, call_duration, contacts(nama)")
+        .order("timestamp", { ascending: false })
+        .limit(500),
+      supabase
+        .from("applications")
+        .select("agent_id, status_aplikasi, nominal_pencairan, created_at, date_disbursed"),
+    ]),
+    // fetchAllRows, bukan .select() polos - contacts sudah 1.404 baris,
+    // lewat batas diam-diam 1.000 baris PostgREST (lihat
+    // lib/supabase/pagination.ts). Health Database & seluruh kolom per-agen
+    // di bawah diturunkan dari array ini.
+    fetchAllRows<ContactRow>((from, to) =>
+      supabase
+        .from("contacts")
+        .select("id, nama, no_hp, assigned_to, status_call")
+        .range(from, to)
+    ),
   ]);
 
   const agents = agentRows ?? [];
-  const contacts = (contactRows ?? []) as ContactRow[];
   const periodeLogs = (periodeLogRows ?? []) as CallLogPeriodeRow[];
   const recentLogs = (recentLogRows ?? []) as unknown as CallLogRecentRow[];
   const apps = (appRows ?? []) as ApplicationRow[];

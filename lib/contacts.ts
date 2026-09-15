@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Contact, StatusCall, VehicleType } from "@/types";
 import type { ActiveSlotsInfo } from "@/components/agent/QueueTable";
 import { createServiceRoleClient } from "@/lib/supabase/service";
+import { fetchAllRows } from "@/lib/supabase/pagination";
 import { todayWib, wibDayEndIso } from "@/lib/wib-date";
 
 // Status yang masih perlu ditindaklanjuti (belum final). Satu-satunya
@@ -98,17 +99,23 @@ export async function getAgentCapacitiesBulk(
 ): Promise<AgentCapacityInfo[]> {
   if (agents.length === 0) return [];
 
-  const { data } = await supabase
-    .from("contacts")
-    .select("assigned_to")
-    .in(
-      "assigned_to",
-      agents.map((a) => a.id)
-    )
-    .in("status_call", ["Uncalled", "In Progress", "Warm"]);
+  // fetchAllRows, bukan .select() polos - dipakai auto-distribusi import
+  // CSV, jadi harus lengkap begitu kontak aktif tim tumbuh lewat 1.000
+  // (lihat lib/supabase/pagination.ts).
+  const rows = await fetchAllRows<{ assigned_to: string | null }>((from, to) =>
+    supabase
+      .from("contacts")
+      .select("assigned_to")
+      .in(
+        "assigned_to",
+        agents.map((a) => a.id)
+      )
+      .in("status_call", ["Uncalled", "In Progress", "Warm"])
+      .range(from, to)
+  );
 
   const used = new Map<string, number>();
-  for (const row of data ?? []) {
+  for (const row of rows) {
     const agentId = row.assigned_to as string;
     used.set(agentId, (used.get(agentId) ?? 0) + 1);
   }
