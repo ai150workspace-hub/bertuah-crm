@@ -251,7 +251,20 @@ const CATATAN_LAPANGAN_LIMIT = 20;
 /**
  * Catatan mentah dari call_logs untuk 7 status "Bicara dengan orangnya"
  * (lihat statusWajibCatatan() - satu-satunya definisi daftar ini), periode
- * yang sama dengan filter Dashboard, terbaru dulu, maksimal 20 baris.
+ * yang sama dengan filter Dashboard, terbaru dulu, maksimal
+ * CATATAN_LAPANGAN_LIMIT baris PER STATUS.
+ *
+ * DULU 1 query gabungan `hasil IN (7 kode)` dengan LIMIT 20 TOTAL - status
+ * yang jarang muncul (mis. KONFIRMASI_PASANGAN, TOLAK_HARGA) bisa tertelan
+ * habis oleh status yang jauh lebih sering (TOLAK_BUTUH, ~80% dari semua
+ * panggilan), sampai 0 baris lolos ke 20 slot yang ada walau datanya
+ * benar-benar ada di periode itu - ditemukan nyata di produksi lewat
+ * dropdown "Alasan" di CatatanLapangan.tsx yang menampilkan "belum ada
+ * catatan" untuk status yang sebenarnya punya data. Sekarang tiap status
+ * diambil top-N MILIKNYA SENDIRI secara terpisah (7 query kecil paralel),
+ * baru digabung dan diurutkan ulang - supaya memilih status yang jarang
+ * muncul di dropdown tetap menampilkan catatannya, bukan ikut tersingkir
+ * oleh status lain.
  */
 export async function getCatatanLapangan(
   supabase: SupabaseClient,
@@ -260,20 +273,26 @@ export async function getCatatanLapangan(
   const startIso = wibDayStartIso(range.from);
   const endIso = wibDayEndIso(range.to);
 
-  const { data } = await supabase
-    .from("call_logs")
-    .select("id, timestamp, hasil, call_notes, users(name), contacts!inner(nama)")
-    .in("hasil", statusWajibCatatan())
-    .not("call_notes", "is", null)
-    .neq("call_notes", "")
-    .gte("timestamp", startIso)
-    .lte("timestamp", endIso)
-    .order("timestamp", { ascending: false })
-    .limit(CATATAN_LAPANGAN_LIMIT)
-    .returns<CatatanLapanganRow[]>();
+  const results = await Promise.all(
+    statusWajibCatatan().map((kode) =>
+      supabase
+        .from("call_logs")
+        .select("id, timestamp, hasil, call_notes, users(name), contacts!inner(nama)")
+        .eq("hasil", kode)
+        .not("call_notes", "is", null)
+        .neq("call_notes", "")
+        .gte("timestamp", startIso)
+        .lte("timestamp", endIso)
+        .order("timestamp", { ascending: false })
+        .limit(CATATAN_LAPANGAN_LIMIT)
+        .returns<CatatanLapanganRow[]>()
+    )
+  );
 
-  return (data ?? [])
+  return results
+    .flatMap((r) => r.data ?? [])
     .filter((r) => (r.call_notes ?? "").trim().length > 0)
+    .sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1))
     .map((r) => ({
       id: r.id,
       timestamp: r.timestamp,
