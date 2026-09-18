@@ -129,11 +129,25 @@ export async function getAgentCapacitiesBulk(
 }
 
 /**
- * Tandai kontak yang pernah dihubungi agen LAIN (recycled dari Warm/In
- * Progress) - satu query untuk semua kontak, bukan per-kontak.
+ * Tandai dua hal berbeda dari SATU query call_logs yang sama - satu
+ * query untuk semua kontak, bukan per-kontak:
+ *
+ *   hasPreviousCalls   - kontak ini punya call log, milik siapa pun.
+ *                        Dipakai buat memunculkan panel "Riwayat
+ *                        Panggilan" di customer drawer (termasuk
+ *                        riwayat milik agen sendiri, sejak program
+ *                        percobaan ulang / menelepon ulang nomor yang
+ *                        sama 2-3 kali).
+ *   hasOtherAgentCalls - kontak ini pernah dihubungi agen LAIN (bukan
+ *                        currentAgentId). Ini makna asli/lama dari
+ *                        penanda "recycled" - dipakai badge "Recycled"
+ *                        di QueueTable.tsx. HARUS tetap terpisah dari
+ *                        hasPreviousCalls, karena kontak yang cuma
+ *                        pernah ditelepon oleh agen yang sama BUKAN
+ *                        kontak recycled.
  *
  * RLS call_logs cuma izinkan agent lihat log miliknya sendiri (by
- * design), jadi query "log dari agen lain" ini butuh service role.
+ * design), jadi query lintas-agen ini butuh service role.
  * `currentAgentId` datang dari sesi yang sudah terautentikasi di
  * pemanggil - bukan input bebas dari klien.
  */
@@ -145,14 +159,21 @@ export async function markPreviousCallFlags(
   const service = createServiceRoleClient();
   const { data } = await service
     .from("call_logs")
-    .select("contact_id")
+    .select("contact_id, agent_id")
     .in(
       "contact_id",
       contacts.map((c) => c.id)
-    )
-    .neq("agent_id", currentAgentId);
-  const flagged = new Set((data ?? []).map((r) => r.contact_id as string));
-  return contacts.map((c) => ({ ...c, hasPreviousCalls: flagged.has(c.id) }));
+    );
+  const rows = data ?? [];
+  const adaLog = new Set(rows.map((r) => r.contact_id as string));
+  const adaLogAgenLain = new Set(
+    rows.filter((r) => r.agent_id !== currentAgentId).map((r) => r.contact_id as string)
+  );
+  return contacts.map((c) => ({
+    ...c,
+    hasPreviousCalls: adaLog.has(c.id),
+    hasOtherAgentCalls: adaLogAgenLain.has(c.id),
+  }));
 }
 
 /**

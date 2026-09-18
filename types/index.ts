@@ -37,8 +37,10 @@ export interface Contact {
   assignedTo?: string;
   lastContactedAt?: string;
   nextFollowUpAt?: string;
-  /** Pernah dihubungi agen lain sebelumnya (recycled dari Warm/In Progress). */
+  /** Kontak ini punya call log, milik agen mana pun - dipakai untuk memunculkan panel Riwayat Panggilan. */
   hasPreviousCalls?: boolean;
+  /** Pernah dihubungi agen LAIN (recycled) - dipakai untuk badge Recycled di antrean. */
+  hasOtherAgentCalls?: boolean;
 }
 
 export type ApplicationStatus =

@@ -390,7 +390,7 @@ export function QueueTable({
                       >
                         {c.nama}
                       </span>
-                      {c.hasPreviousCalls && (
+                      {c.hasOtherAgentCalls && (
                         <Badge
                           variant="outline"
                           className="bg-indigo-500/10 text-indigo-600 border-indigo-500/20 dark:text-indigo-400 px-1.5 py-0 text-[10px] font-normal"

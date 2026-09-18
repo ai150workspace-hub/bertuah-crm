@@ -97,12 +97,15 @@ export interface PreviousCallHistoryEntry {
   agentFirstName: string;
   hasilLabel: string;
   notes: string | null;
+  /** true kalau log ini milik agen yang sedang login (bukan agen lain). */
+  isOwn: boolean;
 }
 
 interface PreviousCallLogRow {
   timestamp: string;
   hasil: string | null;
   call_notes: string | null;
+  agent_id: string;
   users: { name: string } | { name: string }[] | null;
 }
 
@@ -112,9 +115,13 @@ function agentNameOf(u: PreviousCallLogRow["users"]): string {
 }
 
 /**
- * Ringkasan call log dari agen LAIN (bukan agen yang sedang login) untuk
- * kontak recycled — supaya mitra baru tahu konteks sebelum menelepon,
- * tanpa mengekspos nomor HP agen lain atau catatan internal yang penuh.
+ * Ringkasan call log pada kontak ini — milik agen yang sedang login
+ * MAUPUN agen lain — supaya agen (a) punya konteks kalau kontak ini
+ * sebelumnya ditangani agen lain (recycled), dan (b) sejak program
+ * percobaan ulang (menelepon ulang nomor yang sama 2-3 kali) bisa lihat
+ * catatannya sendiri dari panggilan sebelumnya, tanpa mengekspos nomor
+ * HP agen lain atau catatan internal yang penuh untuk log yang bukan
+ * miliknya.
  */
 export async function getPreviousCallHistory(
   contactId: string
@@ -125,9 +132,11 @@ export async function getPreviousCallHistory(
   } = await supabase.auth.getUser();
   if (!user) return [];
 
-  // RLS call_logs cuma izinkan agent lihat log miliknya sendiri (by
-  // design). Riwayat dari agen lain di sini butuh service role, jadi
-  // cek dulu manual bahwa kontak ini memang milik agent yang minta.
+  // Penjaga keamanan: siapa pun yang minta, kontak ini harus memang
+  // sedang di-assign ke agen yang login. RLS call_logs cuma izinkan
+  // agent lihat log miliknya sendiri (by design) - riwayat gabungan
+  // (termasuk log agen lain) di sini tetap butuh service role, jadi cek
+  // kepemilikan kontak ini dilakukan manual dulu sebelum query itu.
   const { data: contact } = await supabase
     .from("contacts")
     .select("assigned_to")
@@ -138,16 +147,21 @@ export async function getPreviousCallHistory(
   const service = createServiceRoleClient();
   const { data } = await service
     .from("call_logs")
-    .select("timestamp, hasil, call_notes, users(name)")
+    .select("timestamp, hasil, call_notes, agent_id, users(name)")
     .eq("contact_id", contactId)
-    .neq("agent_id", user.id)
     .order("timestamp", { ascending: false })
-    .limit(5);
+    .limit(8);
 
-  return ((data ?? []) as unknown as PreviousCallLogRow[]).map((row) => ({
-    timestamp: row.timestamp,
-    agentFirstName: agentNameOf(row.users).split(" ")[0] ?? "Agen",
-    hasilLabel: row.hasil ? (HASIL_LABEL.get(row.hasil as KodeHasil) ?? row.hasil) : "—",
-    notes: row.call_notes ? row.call_notes.slice(0, 100) : null,
-  }));
+  return ((data ?? []) as unknown as PreviousCallLogRow[]).map((row) => {
+    const isOwn = row.agent_id === user.id;
+    return {
+      timestamp: row.timestamp,
+      agentFirstName: agentNameOf(row.users).split(" ")[0] ?? "Agen",
+      hasilLabel: row.hasil ? (HASIL_LABEL.get(row.hasil as KodeHasil) ?? row.hasil) : "—",
+      // Punya sendiri boleh dibaca penuh (300 karakter) - catatan agen
+      // lain tetap dipotong pendek (100) seperti semula.
+      notes: row.call_notes ? row.call_notes.slice(0, isOwn ? 300 : 100) : null,
+      isOwn,
+    };
+  });
 }
