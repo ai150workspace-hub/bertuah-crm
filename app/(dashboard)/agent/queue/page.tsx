@@ -120,7 +120,7 @@ export default async function AgentQueuePage({
 
     const { data: contactRows, count } = await query;
     const rawContacts = ((contactRows ?? []) as ContactRow[]).map(mapDbContact);
-    contacts = await markPreviousCallFlags(rawContacts, profile.id);
+    contacts = await markPreviousCallFlags(rawContacts);
     totalCount = count ?? 0;
   }
 

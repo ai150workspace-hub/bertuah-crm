@@ -157,7 +157,7 @@ export default async function AgentDashboardPage() {
   // 5 operasi independen (tidak saling butuh hasil satu sama lain) - jalan
   // bareng, bukan berurutan.
   const [contacts, capabilities, activeSlots, scripts, initialFollowupTemplate] = await Promise.all([
-    profile ? markPreviousCallFlags(previewContacts, profile.id) : Promise.resolve(previewContacts),
+    markPreviousCallFlags(previewContacts),
     getCapabilities(),
     profile ? getActiveSlots(supabase, profile.id) : Promise.resolve(null),
     getActiveScriptContent(),

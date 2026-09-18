@@ -41,7 +41,7 @@ import type { ProviderCapabilities } from "@/lib/telephony/types";
 import { ScriptSidebar } from "./ScriptSidebar";
 import type { ScriptContentRow } from "@/lib/scripts";
 import { fillWaPlaceholders, type ScriptPlaceholderData } from "@/lib/script-placeholder";
-import { todayWib, addDaysWib } from "@/lib/wib-date";
+import { todayWib, addDaysWib, formatDateTimeShortID } from "@/lib/wib-date";
 import { cn } from "@/lib/utils";
 
 const RUPIAH_PLAIN = new Intl.NumberFormat("id-ID");
@@ -269,20 +269,22 @@ export function CustomerDrawer({
               <Separator />
               <section className="space-y-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Riwayat Sebelumnya
+                  Riwayat Panggilan
                 </h4>
                 {history.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Memuat riwayat...</p>
                 ) : (
                   <div className="space-y-2.5">
                     {history.map((h, i) => (
-                      <div key={i} className="border-l-2 border-indigo-500/30 pl-2.5 text-sm">
+                      <div
+                        key={i}
+                        className={cn(
+                          "border-l-2 pl-2.5 text-sm",
+                          h.isOwn ? "border-primary/40" : "border-indigo-500/30"
+                        )}
+                      >
                         <div className="text-xs text-muted-foreground">
-                          {new Date(h.timestamp).toLocaleDateString("id-ID", {
-                            day: "numeric",
-                            month: "short",
-                          })}{" "}
-                          · {h.agentFirstName}
+                          {formatDateTimeShortID(h.timestamp)} · {h.isOwn ? "Kamu" : h.agentFirstName}
                         </div>
                         <div className="font-medium">{h.hasilLabel}</div>
                         {h.notes && (

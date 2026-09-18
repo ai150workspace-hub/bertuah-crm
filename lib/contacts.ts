@@ -129,18 +129,20 @@ export async function getAgentCapacitiesBulk(
 }
 
 /**
- * Tandai kontak yang pernah dihubungi agen LAIN (recycled dari Warm/In
- * Progress) - satu query untuk semua kontak, bukan per-kontak.
+ * Tandai kontak yang punya call log - milik siapa pun, bukan cuma agen
+ * lain - satu query untuk semua kontak, bukan per-kontak.
+ *
+ * Awalnya cuma menandai log dari agen LAIN (buat kontak recycled), tapi
+ * sejak program percobaan ulang (agen menelepon ulang nomor yang sama
+ * 2-3 kali) agen juga perlu lihat riwayat panggilannya sendiri - lihat
+ * getPreviousCallHistory() di app/actions/call-log.ts yang menampilkan
+ * isi log itu.
  *
  * RLS call_logs cuma izinkan agent lihat log miliknya sendiri (by
- * design), jadi query "log dari agen lain" ini butuh service role.
- * `currentAgentId` datang dari sesi yang sudah terautentikasi di
- * pemanggil - bukan input bebas dari klien.
+ * design), jadi query lintas-agen ini tetap butuh service role walau
+ * sekarang log agen sendiri juga ikut ditandai.
  */
-export async function markPreviousCallFlags(
-  contacts: Contact[],
-  currentAgentId: string
-): Promise<Contact[]> {
+export async function markPreviousCallFlags(contacts: Contact[]): Promise<Contact[]> {
   if (contacts.length === 0) return contacts;
   const service = createServiceRoleClient();
   const { data } = await service
@@ -149,8 +151,7 @@ export async function markPreviousCallFlags(
     .in(
       "contact_id",
       contacts.map((c) => c.id)
-    )
-    .neq("agent_id", currentAgentId);
+    );
   const flagged = new Set((data ?? []).map((r) => r.contact_id as string));
   return contacts.map((c) => ({ ...c, hasPreviousCalls: flagged.has(c.id) }));
 }
