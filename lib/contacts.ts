@@ -129,31 +129,51 @@ export async function getAgentCapacitiesBulk(
 }
 
 /**
- * Tandai kontak yang punya call log - milik siapa pun, bukan cuma agen
- * lain - satu query untuk semua kontak, bukan per-kontak.
+ * Tandai dua hal berbeda dari SATU query call_logs yang sama - satu
+ * query untuk semua kontak, bukan per-kontak:
  *
- * Awalnya cuma menandai log dari agen LAIN (buat kontak recycled), tapi
- * sejak program percobaan ulang (agen menelepon ulang nomor yang sama
- * 2-3 kali) agen juga perlu lihat riwayat panggilannya sendiri - lihat
- * getPreviousCallHistory() di app/actions/call-log.ts yang menampilkan
- * isi log itu.
+ *   hasPreviousCalls   - kontak ini punya call log, milik siapa pun.
+ *                        Dipakai buat memunculkan panel "Riwayat
+ *                        Panggilan" di customer drawer (termasuk
+ *                        riwayat milik agen sendiri, sejak program
+ *                        percobaan ulang / menelepon ulang nomor yang
+ *                        sama 2-3 kali).
+ *   hasOtherAgentCalls - kontak ini pernah dihubungi agen LAIN (bukan
+ *                        currentAgentId). Ini makna asli/lama dari
+ *                        penanda "recycled" - dipakai badge "Recycled"
+ *                        di QueueTable.tsx. HARUS tetap terpisah dari
+ *                        hasPreviousCalls, karena kontak yang cuma
+ *                        pernah ditelepon oleh agen yang sama BUKAN
+ *                        kontak recycled.
  *
  * RLS call_logs cuma izinkan agent lihat log miliknya sendiri (by
- * design), jadi query lintas-agen ini tetap butuh service role walau
- * sekarang log agen sendiri juga ikut ditandai.
+ * design), jadi query lintas-agen ini butuh service role.
+ * `currentAgentId` datang dari sesi yang sudah terautentikasi di
+ * pemanggil - bukan input bebas dari klien.
  */
-export async function markPreviousCallFlags(contacts: Contact[]): Promise<Contact[]> {
+export async function markPreviousCallFlags(
+  contacts: Contact[],
+  currentAgentId: string
+): Promise<Contact[]> {
   if (contacts.length === 0) return contacts;
   const service = createServiceRoleClient();
   const { data } = await service
     .from("call_logs")
-    .select("contact_id")
+    .select("contact_id, agent_id")
     .in(
       "contact_id",
       contacts.map((c) => c.id)
     );
-  const flagged = new Set((data ?? []).map((r) => r.contact_id as string));
-  return contacts.map((c) => ({ ...c, hasPreviousCalls: flagged.has(c.id) }));
+  const rows = data ?? [];
+  const adaLog = new Set(rows.map((r) => r.contact_id as string));
+  const adaLogAgenLain = new Set(
+    rows.filter((r) => r.agent_id !== currentAgentId).map((r) => r.contact_id as string)
+  );
+  return contacts.map((c) => ({
+    ...c,
+    hasPreviousCalls: adaLog.has(c.id),
+    hasOtherAgentCalls: adaLogAgenLain.has(c.id),
+  }));
 }
 
 /**
