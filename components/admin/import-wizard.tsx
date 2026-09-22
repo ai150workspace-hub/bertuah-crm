@@ -161,6 +161,11 @@ export function ImportWizard({ agents }: { agents: AgentCapacityInfo[] }) {
       }
       setFilename(file.name);
       const res = await validateImportRows(rows);
+      if (!res.success) {
+        toast.error("Gagal memeriksa duplikat di database.", { description: res.error });
+        setFilename(null);
+        return;
+      }
       setValidated(res);
     } catch (err) {
       toast.error("Gagal membaca file.", {

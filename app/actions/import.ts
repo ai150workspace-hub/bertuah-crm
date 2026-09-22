@@ -36,9 +36,23 @@ const TAHUN_MIN = 1990;
 const TAHUN_MAX = 2030;
 
 export interface ValidateImportResult {
+  success: boolean;
+  /** Diisi kalau success false - mis. pengecekan duplikat ke database gagal. */
+  error?: string;
   rows: ValidatedRow[];
   summary: { valid: number; duplicate: number; invalid: number };
 }
+
+// PostgREST memotong hasil SATU query ke 1.000 baris secara diam-diam
+// kalau tidak pakai .range()/count - dan .in() dengan ribuan nilai bisa
+// membuat URL query ditolak sebelum sampai ke database. Kejadian nyata:
+// file 3.591 baris gagal total karena sebagian nomor yang sudah ada di
+// database lolos deteksi duplikat, lalu insert-nya melanggar
+// idx_contacts_no_hp_unique. Candidate numbers dipecah jadi potongan
+// kecil di sini - beda dari lib/supabase/pagination.ts:fetchAllRows()
+// yang menangani hasil query besar lewat .range(), bukan input .in()
+// yang besar (pola berbeda, jadi tidak dipaksakan pakai helper itu).
+const DUPLICATE_CHECK_CHUNK_SIZE = 500;
 
 export async function validateImportRows(rows: RawImportRow[]): Promise<ValidateImportResult> {
   const supabase = await createClient();
@@ -109,17 +123,32 @@ export async function validateImportRows(rows: RawImportRow[]): Promise<Validate
     ),
   ];
 
-  let existing = new Set<string>();
-  if (candidateNumbers.length) {
+  const existing = new Set<string>();
+  // Dipecah jadi potongan DUPLICATE_CHECK_CHUNK_SIZE, satu query per
+  // potongan - lihat catatan di atas DUPLICATE_CHECK_CHUNK_SIZE.
+  for (let i = 0; i < candidateNumbers.length; i += DUPLICATE_CHECK_CHUNK_SIZE) {
+    const chunk = candidateNumbers.slice(i, i + DUPLICATE_CHECK_CHUNK_SIZE);
     // Bandingkan dalam bentuk ternormalisasi juga di sisi database - no_hp
     // yang tersimpan seharusnya sudah format lokal '0812...', tapi baris
     // lama bisa saja tidak konsisten.
-    const { data } = await supabase.from("contacts").select("no_hp").in("no_hp", candidateNumbers);
-    existing = new Set(
-      (data ?? [])
-        .map((d) => normalizePhoneLocal(d.no_hp as string))
-        .filter((v): v is string => v !== null)
-    );
+    const { data, error } = await supabase.from("contacts").select("no_hp").in("no_hp", chunk);
+    if (error) {
+      // JANGAN diam-diam lanjut dengan set kosong - itu bikin sebagian
+      // nomor yang sudah ada lolos sebagai "valid" lalu insert-nya
+      // melanggar idx_contacts_no_hp_unique, persis bug yang mau
+      // diperbaiki di sini. Hentikan validasi, kembalikan error yang
+      // jelas ke pemanggil (lihat components/admin/import-wizard.tsx).
+      return {
+        success: false,
+        error: `Gagal memeriksa duplikat di database: ${error.message}`,
+        rows: [],
+        summary: { valid: 0, duplicate: 0, invalid: 0 },
+      };
+    }
+    for (const d of data ?? []) {
+      const normalized = normalizePhoneLocal(d.no_hp as string);
+      if (normalized) existing.add(normalized);
+    }
   }
 
   const finalRows: ValidatedRow[] = prelim.map((r) => {
@@ -135,7 +164,7 @@ export async function validateImportRows(rows: RawImportRow[]): Promise<Validate
     invalid: finalRows.filter((r) => r.status === "invalid").length,
   };
 
-  return { rows: finalRows, summary };
+  return { success: true, rows: finalRows, summary };
 }
 
 export interface AgentCapacityInfo {
