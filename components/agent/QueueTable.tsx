@@ -166,6 +166,7 @@ export function QueueTable({
   const [claiming, setClaiming] = useState(false);
   const [batchSize, setBatchSize] = useState(DEFAULT_CLAIM_BATCH_SIZE);
   const [lastClaimResult, setLastClaimResult] = useState<string | null>(null);
+  const [pageInput, setPageInput] = useState("");
 
   function apply(next: Record<string, string>) {
     const params = new URLSearchParams(searchParams.toString());
@@ -191,6 +192,19 @@ export function QueueTable({
 
   const effectiveTotal = totalCount ?? contacts.length;
   const totalPages = compact ? 1 : Math.max(1, Math.ceil(effectiveTotal / pageSize));
+
+  function handleJumpToPage(e: React.FormEvent) {
+    e.preventDefault();
+    const n = Number.parseInt(pageInput, 10);
+    if (Number.isNaN(n)) return;
+    const target = Math.min(Math.max(n, 1), totalPages);
+    if (target === page) {
+      setPageInput("");
+      return;
+    }
+    router.push(hrefForPage(target));
+    setPageInput("");
+  }
 
   async function handleClaim() {
     setClaiming(true);
@@ -472,10 +486,28 @@ export function QueueTable({
       </div>
 
       {!compact && totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
           <span>
             Halaman {page} dari {totalPages}
           </span>
+          {totalPages > 3 && (
+            <form onSubmit={handleJumpToPage} className="hidden items-center gap-2 sm:flex">
+              <label htmlFor="queue-jump-page">Ke halaman</label>
+              <input
+                id="queue-jump-page"
+                type="number"
+                min={1}
+                max={totalPages}
+                value={pageInput}
+                onChange={(e) => setPageInput(e.target.value)}
+                placeholder={String(page)}
+                className="h-7 w-16 rounded-md border border-input bg-transparent px-2 text-center text-sm text-foreground shadow-xs"
+              />
+              <Button type="submit" size="sm" variant="outline">
+                Pergi
+              </Button>
+            </form>
+          )}
           <div className="flex gap-2">
             <Button
               size="sm"
