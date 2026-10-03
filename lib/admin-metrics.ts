@@ -322,6 +322,8 @@ export interface DatabaseStatusSnapshot {
   /** Uncalled yang bertag 'ARSIP' - sengaja ditarik dari jangkauan agen, bukan "belum disentuh". */
   diarsipkan: number;
   totalSaatIni: number;
+  /** totalSaatIni - diarsipkan: penyebut persentase, karena arsip tidak bisa dikerjakan siapa pun. */
+  totalBisaDikerjakan: number;
 }
 
 export async function getDatabaseStatusSnapshot(
@@ -368,6 +370,7 @@ export async function getDatabaseStatusSnapshot(
     belumDisentuh: belum,
     diarsipkan: arsip,
     totalSaatIni: total,
+    totalBisaDikerjakan: total - arsip,
   };
 }
 
