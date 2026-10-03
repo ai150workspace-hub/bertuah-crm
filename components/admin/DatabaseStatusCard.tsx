@@ -25,8 +25,8 @@ export function DatabaseStatusCard({ snapshot }: { snapshot: DatabaseStatusSnaps
 
 function DatabaseStatusBody({ snapshot }: { snapshot: DatabaseStatusSnapshot }) {
   // Persentase dihitung dari kontak yang benar-benar ada saat ini
-  // (sudahDikerjakan + belumDisentuh = totalSaatIni, selalu pas karena
-  // status_call NOT NULL) - bukan dari totalUploaded, yang bisa beda
+  // (sudahDikerjakan + belumDisentuh + diarsipkan = totalSaatIni, selalu pas
+  // karena status_call NOT NULL) - bukan dari totalUploaded, yang bisa beda
   // (lihat catatan di admin-metrics.ts).
   const pct = snapshot.totalSaatIni > 0 ? (snapshot.sudahDikerjakan / snapshot.totalSaatIni) * 100 : 0;
   const barColor = pct > 70 ? "bg-success" : pct >= 40 ? "bg-warning" : "bg-destructive";
@@ -45,6 +45,7 @@ function DatabaseStatusBody({ snapshot }: { snapshot: DatabaseStatusSnapshot }) 
       <p className="text-xs text-muted-foreground">
         {formatNumber(snapshot.totalUploaded)} data ter-upload · {formatNumber(snapshot.sudahDikerjakan)}{" "}
         sudah dikerjakan · {formatNumber(snapshot.belumDisentuh)} belum disentuh
+        {snapshot.diarsipkan > 0 && <> · {formatNumber(snapshot.diarsipkan)} diarsipkan</>}
       </p>
     </div>
   );

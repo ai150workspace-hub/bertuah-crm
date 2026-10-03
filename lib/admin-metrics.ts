@@ -319,19 +319,39 @@ export interface DatabaseStatusSnapshot {
   totalUploaded: number;
   sudahDikerjakan: number;
   belumDisentuh: number;
+  /** Uncalled yang bertag 'ARSIP' - sengaja ditarik dari jangkauan agen, bukan "belum disentuh". */
+  diarsipkan: number;
   totalSaatIni: number;
 }
 
 export async function getDatabaseStatusSnapshot(
   supabase: SupabaseClient
 ): Promise<DatabaseStatusSnapshot> {
-  const [{ data: completedBatches }, { count: batchTotalCount }, { count: totalSaatIni }, { count: belumDisentuh }] =
-    await Promise.all([
-      supabase.from("data_batches").select("total_rows").eq("status", "Completed"),
-      supabase.from("data_batches").select("*", { count: "exact", head: true }),
-      supabase.from("contacts").select("*", { count: "exact", head: true }),
-      supabase.from("contacts").select("*", { count: "exact", head: true }).eq("status_call", "Uncalled"),
-    ]);
+  const [
+    { data: completedBatches },
+    { count: batchTotalCount },
+    { count: totalSaatIni },
+    { count: belumDisentuh },
+    { count: diarsipkan },
+  ] = await Promise.all([
+    supabase.from("data_batches").select("total_rows").eq("status", "Completed"),
+    supabase.from("data_batches").select("*", { count: "exact", head: true }),
+    supabase.from("contacts").select("*", { count: "exact", head: true }),
+    // tags nullable (text[]) - .not("tags","cs",...) saja bernilai NULL untuk
+    // tags NULL dan membuang barisnya (terverifikasi: 0 dari ribuan kontak),
+    // jadi NULL harus disebut eksplisit lewat .or(). Tag umum 'ARSIP', bukan
+    // nama arsip spesifik (mis. ARSIP-BRI-2026-10).
+    supabase
+      .from("contacts")
+      .select("*", { count: "exact", head: true })
+      .eq("status_call", "Uncalled")
+      .or("tags.is.null,tags.not.cs.{ARSIP}"),
+    supabase
+      .from("contacts")
+      .select("*", { count: "exact", head: true })
+      .eq("status_call", "Uncalled")
+      .contains("tags", ["ARSIP"]),
+  ]);
 
   const totalUploaded = (completedBatches ?? []).reduce(
     (sum, b) => sum + ((b as { total_rows: number | null }).total_rows ?? 0),
@@ -339,12 +359,14 @@ export async function getDatabaseStatusSnapshot(
   );
   const total = totalSaatIni ?? 0;
   const belum = belumDisentuh ?? 0;
+  const arsip = diarsipkan ?? 0;
 
   return {
     adaRiwayatUpload: (batchTotalCount ?? 0) > 0,
     totalUploaded,
-    sudahDikerjakan: total - belum,
+    sudahDikerjakan: total - belum - arsip,
     belumDisentuh: belum,
+    diarsipkan: arsip,
     totalSaatIni: total,
   };
 }
