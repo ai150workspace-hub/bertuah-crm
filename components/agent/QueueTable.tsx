@@ -36,11 +36,12 @@ import { todayWib, wibDateFromIso, formatDateID } from "@/lib/wib-date";
 
 const DEFAULT_CLAIM_BATCH_SIZE = 50;
 const MAX_CLAIM_BATCH_SIZE = 50;
-// Urutan & label dropdown filter status - "Aktif" (gabungan status yang
-// masih perlu ditindaklanjuti) di paling atas karena itu defaultnya,
-// "Semua Status" di paling bawah karena jarang dipakai (lihat komentar
-// default "aktif" di app/(dashboard)/agent/queue/page.tsx).
+// Urutan & label dropdown filter status - "Kerjakan Hari Ini" (follow-up
+// jatuh tempo + In Progress yang layak dicoba lagi) di paling atas karena
+// itu defaultnya, "Semua Status" di paling bawah karena jarang dipakai
+// (lihat komentar default "hariini" di app/(dashboard)/agent/queue/page.tsx).
 const STATUS_FILTER_OPTIONS: { value: string; label: string }[] = [
+  { value: "hariini", label: "Kerjakan Hari Ini" },
   { value: "aktif", label: "Aktif" },
   { value: "due", label: "Jatuh Tempo" },
   { value: "Uncalled", label: "Uncalled" },
@@ -54,9 +55,12 @@ const STATUS_FILTER_OPTIONS: { value: string; label: string }[] = [
 const STATUS_FILTER_LABEL: Record<string, string> = Object.fromEntries(
   STATUS_FILTER_OPTIONS.map((o) => [o.value, o.label])
 );
-export type SortKey = "updated" | "nama" | "status" | "followup";
+const PESAN_KOSONG_HARI_INI =
+  "Tidak ada follow-up jatuh tempo dan tidak ada kontak yang perlu dicoba ulang hari ini. Lanjutkan dengan data lain.";
+export type SortKey = "prioritas" | "updated" | "nama" | "status" | "followup";
 
 const SORT_LABEL: Record<SortKey, string> = {
+  prioritas: "Prioritas Kerja",
   updated: "Last Updated",
   nama: "Nama",
   status: "Status",
@@ -121,9 +125,10 @@ export function QueueTable({
   agentStatus,
   compact = false,
   totalCount,
+  hariIniCount,
   q = "",
-  statusFilter = "aktif",
-  sortKey = "updated",
+  statusFilter = "hariini",
+  sortKey = "prioritas",
   page = 1,
   pageSize = 25,
   scripts,
@@ -138,6 +143,8 @@ export function QueueTable({
   compact?: boolean;
   /** Total lead sesungguhnya sesuai filter aktif - beda dari contacts.length kalau `contacts` cuma cuplikan (mis. preview di Dashboard, atau 1 halaman dari server). Default contacts.length. */
   totalCount?: number;
+  /** Jumlah kontak "Kerjakan Hari Ini" milik agen (tidak ikut pencarian) - untuk label filter. Full mode saja. */
+  hariIniCount?: number;
   /** Full mode saja (state URL, lihat page.tsx) - diabaikan kalau compact. */
   q?: string;
   statusFilter?: string;
@@ -182,6 +189,13 @@ export function QueueTable({
     const params = new URLSearchParams(searchParams.toString());
     params.set("page", String(p));
     return `${pathname}?${params.toString()}`;
+  }
+
+  // Label dropdown filter - "Kerjakan Hari Ini" memuat jumlahnya, mis.
+  // "Kerjakan Hari Ini (37)".
+  function filterLabel(value: string): string {
+    const label = STATUS_FILTER_LABEL[value] ?? value;
+    return value === "hariini" && hariIniCount !== undefined ? `${label} (${hariIniCount})` : label;
   }
 
   const pageItems = compact
@@ -297,21 +311,21 @@ export function QueueTable({
             <>
               <Select
                 value={statusFilter}
-                // Selalu tulis nilai literal (termasuk "aktif" dan "all") -
-                // JANGAN dihapus dari URL kalau "all" dipilih, karena
-                // default sekarang "aktif", bukan "all" (menghapus param
-                // akan salah balik ke "aktif").
-                onValueChange={(v) => apply({ status: v ?? "aktif" })}
+                // Selalu tulis nilai literal (termasuk "hariini", "aktif" dan
+                // "all") - JANGAN dihapus dari URL kalau "all" dipilih, karena
+                // default sekarang "hariini", bukan "all" (menghapus param
+                // akan salah balik ke "hariini").
+                onValueChange={(v) => apply({ status: v ?? "hariini" })}
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-52">
                   <SelectValue>
-                    {(v: string | null) => STATUS_FILTER_LABEL[v ?? "aktif"] ?? v}
+                    {(v: string | null) => filterLabel(v ?? "hariini")}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {STATUS_FILTER_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
+                      {filterLabel(opt.value)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -319,11 +333,11 @@ export function QueueTable({
 
               <Select
                 value={sortKey}
-                onValueChange={(v) => apply({ sort: (v as SortKey) ?? "updated" })}
+                onValueChange={(v) => apply({ sort: (v as SortKey) ?? "prioritas" })}
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-48">
                   <SelectValue>
-                    {(v: string | null) => `Urut: ${SORT_LABEL[(v as SortKey) ?? "updated"]}`}
+                    {(v: string | null) => `Urut: ${SORT_LABEL[(v as SortKey) ?? "prioritas"]}`}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -376,6 +390,17 @@ export function QueueTable({
         <p className="text-xs text-muted-foreground">{lastClaimResult}</p>
       )}
 
+      {!compact && statusFilter === "hariini" && !q.trim() && pageItems.length === 0 ? (
+        // Persediaan kerja hari ini bisa benar-benar kosong - tabel kosong
+        // biasa akan terbaca seperti sistem rusak, jadi jelaskan dan beri
+        // jalan keluar ke daftar aktif.
+        <div className="flex flex-col items-center gap-3 rounded-lg border px-4 py-10 text-center">
+          <p className="max-w-md text-sm text-muted-foreground">{PESAN_KOSONG_HARI_INI}</p>
+          <Button variant="outline" onClick={() => apply({ status: "aktif" })}>
+            Lihat Semua Data Aktif
+          </Button>
+        </div>
+      ) : (
       <div className="rounded-lg border overflow-x-auto">
         <Table>
           <TableHeader>
@@ -484,6 +509,7 @@ export function QueueTable({
           </TableBody>
         </Table>
       </div>
+      )}
 
       {!compact && totalPages > 1 && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">

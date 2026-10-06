@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { adalahRpc, infoHasil, statusWajibCatatan } from "@/lib/call-outcome/derive";
 import { HASIL_PANGGILAN, GRUP_URUT, type KodeHasil } from "@/lib/call-outcome/catalog";
-import { wibDayStartIso, wibDayEndIso } from "@/lib/wib-date";
+import { wibDayStartIso, wibDayEndIso, todayWib } from "@/lib/wib-date";
 import { fetchAllRows } from "@/lib/supabase/pagination";
 
 export interface DateRange {
@@ -398,4 +398,116 @@ export async function getWebLeadsSnapshot(supabase: SupabaseClient): Promise<Web
   ]);
 
   return { total: total ?? 0, belumDiAssign: belumDiAssign ?? 0 };
+}
+
+// ---------------------------------------------------------------------
+// Pengambilan Data Baru - saklar system_config 'uncalled_claim_enabled'
+// (dibaca assign_contacts_to_agent, migrasi 0027) + dua angka pembanding
+// untuk rekomendasi buka/tutup. All-time/hari ini, tidak terikat filter
+// tanggal Dashboard.
+//
+// persediaan = kontak dengan next_follow_up_at <= akhir hari ini WIB dan
+//   status Warm/In Progress/Hot Lead, DITAMBAH kontak In Progress yang
+//   punya < 3 baris call_logs dan belum ada call_logs hari ini (WIB) -
+//   gabungan dihitung per-kontak (Set id), jadi tidak ganda.
+// kapasitas = jumlah agen aktif x system_config 'target_panggilan_per_agen'.
+// ---------------------------------------------------------------------
+
+const TARGET_PANGGILAN_DEFAULT = 160;
+
+export interface PengambilanDataSnapshot {
+  /** true = tahap Uncalled di klaim agen terbuka. Baris config tidak ada / bukan 'false' = terbuka. */
+  terbuka: boolean;
+  persediaan: number;
+  /** Rincian persediaan (diTanganAgen + diPool = persediaan) - hanya komposisi, bukan definisi. */
+  diTanganAgen: number;
+  diPool: number;
+  kapasitas: number;
+  jumlahAgen: number;
+  targetPerAgen: number;
+}
+
+export async function getPengambilanDataSnapshot(
+  supabase: SupabaseClient
+): Promise<PengambilanDataSnapshot> {
+  const today = todayWib();
+  const awalHari = wibDayStartIso(today);
+  const akhirHari = wibDayEndIso(today);
+
+  // Semua pembacaan tabel yang bisa tumbuh pakai fetchAllRows (batas diam-
+  // diam 1.000 baris PostgREST) - lihat lib/supabase/pagination.ts.
+  const [configRows, { count: jumlahAgen }, jatuhTempo, inProgress, dipanggilHariIni] =
+    await Promise.all([
+      supabase
+        .from("system_config")
+        .select("key, value")
+        .in("key", ["uncalled_claim_enabled", "target_panggilan_per_agen"]),
+      supabase
+        .from("users")
+        .select("*", { count: "exact", head: true })
+        .eq("role", "agent")
+        .eq("is_active", true),
+      fetchAllRows<{ id: string; assigned_to: string | null }>((from, to) =>
+        supabase
+          .from("contacts")
+          .select("id, assigned_to")
+          .in("status_call", ["Warm", "In Progress", "Hot Lead"])
+          .lte("next_follow_up_at", akhirHari)
+          .order("id", { ascending: true })
+          .range(from, to)
+      ),
+      // Embedded count: jumlah call_logs per kontak, tanpa menarik barisnya.
+      fetchAllRows<{
+        id: string;
+        assigned_to: string | null;
+        call_logs: { count: number }[] | null;
+      }>((from, to) =>
+        supabase
+          .from("contacts")
+          .select("id, assigned_to, call_logs(count)")
+          .eq("status_call", "In Progress")
+          .order("id", { ascending: true })
+          .range(from, to)
+      ),
+      fetchAllRows<{ contact_id: string }>((from, to) =>
+        supabase
+          .from("call_logs")
+          .select("contact_id")
+          .gte("timestamp", awalHari)
+          .lte("timestamp", akhirHari)
+          .order("id", { ascending: true })
+          .range(from, to)
+      ),
+    ]);
+
+  const config = new Map(
+    ((configRows.data ?? []) as { key: string; value: string }[]).map((r) => [r.key, r.value])
+  );
+  const terbuka = (config.get("uncalled_claim_enabled") ?? "true").trim().toLowerCase() !== "false";
+  const targetParsed = Number(config.get("target_panggilan_per_agen"));
+  const targetPerAgen =
+    Number.isFinite(targetParsed) && targetParsed > 0 ? targetParsed : TARGET_PANGGILAN_DEFAULT;
+
+  const sudahDipanggilHariIni = new Set(dipanggilHariIni.map((r) => r.contact_id));
+  // id -> sedang dipegang agen? (satu kontak cuma dihitung sekali walau masuk
+  // dua kelompok). Definisi persediaan tidak berubah; ini cuma komposisinya.
+  const persediaan = new Map<string, boolean>();
+  for (const r of jatuhTempo) persediaan.set(r.id, r.assigned_to !== null);
+  for (const c of inProgress) {
+    const jumlahLog = c.call_logs?.[0]?.count ?? 0;
+    if (jumlahLog < 3 && !sudahDipanggilHariIni.has(c.id)) persediaan.set(c.id, c.assigned_to !== null);
+  }
+  let diTanganAgen = 0;
+  for (const dipegang of persediaan.values()) if (dipegang) diTanganAgen += 1;
+
+  const agen = jumlahAgen ?? 0;
+  return {
+    terbuka,
+    persediaan: persediaan.size,
+    diTanganAgen,
+    diPool: persediaan.size - diTanganAgen,
+    kapasitas: agen * targetPerAgen,
+    jumlahAgen: agen,
+    targetPerAgen,
+  };
 }
