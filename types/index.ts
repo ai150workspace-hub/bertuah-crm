@@ -41,6 +41,8 @@ export interface Contact {
   hasPreviousCalls?: boolean;
   /** Pernah dihubungi agen LAIN (recycled) - dipakai untuk badge Recycled di antrean. */
   hasOtherAgentCalls?: boolean;
+  /** Jumlah call log kontak ini, milik agen mana pun - penanda "Percobaan" (batas BATAS_PERCOBAAN di lib/percobaan.ts). */
+  jumlahPercobaan?: number;
 }
 
 export type ApplicationStatus =

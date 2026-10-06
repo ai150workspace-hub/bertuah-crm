@@ -3,6 +3,7 @@ import type { Contact, StatusCall, VehicleType } from "@/types";
 import type { ActiveSlotsInfo } from "@/components/agent/QueueTable";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { fetchAllRows } from "@/lib/supabase/pagination";
+import { BATAS_PERCOBAAN } from "@/lib/percobaan";
 import { todayWib, wibDayStartIso, wibDayEndIso } from "@/lib/wib-date";
 
 // Status yang masih perlu ditindaklanjuti (belum final). Satu-satunya
@@ -31,8 +32,6 @@ export const ACTIVE_STATUSES = ["Uncalled", "In Progress", "Warm", "Hot Lead"];
 // lalu lampirkanJumlahLog() + saringKerjakanHariIni() menyelesaikannya.
 // ---------------------------------------------------------------------
 
-/** Sama dengan pagar "< 3 baris call_logs" di assign_contacts_to_agent (migrasi 0027). */
-export const BATAS_PERCOBAAN = 3;
 
 function kerjakanHariIniBatas() {
   const today = todayWib();
@@ -303,8 +302,14 @@ export async function getAgentCapacitiesBulk(
 }
 
 /**
- * Tandai dua hal berbeda dari SATU query call_logs yang sama - satu
- * query untuk semua kontak, bukan per-kontak:
+ * Tandai tiga hal dari SATU query call_logs yang sama - satu query untuk
+ * semua kontak, bukan per-kontak:
+ *
+ *   jumlahPercobaan    - jumlah call log kontak ini, milik siapa pun
+ *                        (kolom "Percobaan" di QueueTable.tsx dan baris
+ *                        ringkas di customer drawer). Definisi yang sama
+ *                        dengan pagar BATAS_PERCOBAAN di filter "Kerjakan
+ *                        Hari Ini" - semua log, bukan cuma milik agen ini.
  *
  *   hasPreviousCalls   - kontak ini punya call log, milik siapa pun.
  *                        Dipakai buat memunculkan panel "Riwayat
@@ -343,10 +348,16 @@ export async function markPreviousCallFlags(
   const adaLogAgenLain = new Set(
     rows.filter((r) => r.agent_id !== currentAgentId).map((r) => r.contact_id as string)
   );
+  const jumlahLog = new Map<string, number>();
+  for (const r of rows) {
+    const id = r.contact_id as string;
+    jumlahLog.set(id, (jumlahLog.get(id) ?? 0) + 1);
+  }
   return contacts.map((c) => ({
     ...c,
     hasPreviousCalls: adaLog.has(c.id),
     hasOtherAgentCalls: adaLogAgenLain.has(c.id),
+    jumlahPercobaan: jumlahLog.get(c.id) ?? 0,
   }));
 }
 
