@@ -42,6 +42,7 @@ import { ScriptSidebar } from "./ScriptSidebar";
 import type { ScriptContentRow } from "@/lib/scripts";
 import { fillWaPlaceholders, type ScriptPlaceholderData } from "@/lib/script-placeholder";
 import { todayWib, addDaysWib, formatDateTimeShortID } from "@/lib/wib-date";
+import { BATAS_PERCOBAAN } from "@/lib/percobaan";
 import { cn } from "@/lib/utils";
 
 const RUPIAH_PLAIN = new Intl.NumberFormat("id-ID");
@@ -268,6 +269,16 @@ export function CustomerDrawer({
             <>
               <Separator />
               <section className="space-y-2">
+                {contact.jumlahPercobaan !== undefined &&
+                  (contact.jumlahPercobaan >= BATAS_PERCOBAAN ? (
+                    <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                      Sudah {BATAS_PERCOBAAN} kali dicoba - istirahatkan nomor ini
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Sudah {contact.jumlahPercobaan} kali dicoba dari maksimal {BATAS_PERCOBAAN}
+                    </p>
+                  ))}
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Riwayat Panggilan
                 </h4>

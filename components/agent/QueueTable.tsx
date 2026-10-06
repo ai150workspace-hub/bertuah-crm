@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 import type { Contact } from "@/types";
 import { STATUS_CALL_COLORS } from "@/lib/status-colors";
 import { claimLeads } from "@/app/actions/leads";
+import { BATAS_PERCOBAAN } from "@/lib/percobaan";
 import { CustomerDrawer } from "./customer-drawer";
 import type { ScriptContentRow } from "@/lib/scripts";
 import type { ProviderCapabilities } from "@/lib/telephony/types";
@@ -78,6 +79,17 @@ function followUpInfo(nextFollowUpAt?: string): { label: string; className: stri
     return { label: "Hari ini", className: "text-warning-foreground font-medium" };
   }
   return { label: formatDateID(dueDay), className: "text-muted-foreground" };
+}
+
+/** Penanda jumlah percobaan telepon: abu untuk 1, amber untuk 2, merah untuk 3 ke atas. Belum pernah ditelepon -> "—". */
+function percobaanInfo(jumlah?: number): { label: string; className: string } {
+  if (!jumlah) return { label: "—", className: "text-muted-foreground" };
+  const label = `${jumlah}/${BATAS_PERCOBAAN}`;
+  if (jumlah >= BATAS_PERCOBAAN) return { label, className: "text-destructive font-medium" };
+  if (jumlah === BATAS_PERCOBAAN - 1) {
+    return { label, className: "text-amber-600 dark:text-amber-400 font-medium" };
+  }
+  return { label, className: "text-muted-foreground" };
 }
 
 export interface ActiveSlotsInfo {
@@ -409,6 +421,11 @@ export function QueueTable({
               <TableHead>Kendaraan</TableHead>
               <TableHead className="hidden md:table-cell">Area</TableHead>
               <TableHead>Status Call</TableHead>
+              {!compact && (
+                <TableHead title="Jumlah panggilan ke nomor ini (maksimal 3 percobaan)">
+                  Percobaan
+                </TableHead>
+              )}
               <TableHead className="hidden sm:table-cell">Last Call</TableHead>
               <TableHead>Jadwal Follow-up</TableHead>
               <TableHead className="text-right">Aksi</TableHead>
@@ -463,6 +480,14 @@ export function QueueTable({
                       {c.statusCall}
                     </Badge>
                   </TableCell>
+                  {!compact && (
+                    <TableCell>
+                      {(() => {
+                        const p = percobaanInfo(c.jumlahPercobaan);
+                        return <span className={cn("text-sm tabular-nums", p.className)}>{p.label}</span>;
+                      })()}
+                    </TableCell>
+                  )}
                   <TableCell className="hidden sm:table-cell text-sm text-muted-foreground">
                     {c.lastContactedAt
                       ? formatDistanceToNow(new Date(c.lastContactedAt), {
@@ -501,7 +526,7 @@ export function QueueTable({
             })}
             {pageItems.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={compact ? 7 : 8} className="text-center text-muted-foreground py-8">
                   Tidak ada lead yang cocok.
                 </TableCell>
               </TableRow>
