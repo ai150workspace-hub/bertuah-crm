@@ -276,7 +276,7 @@ export function CustomerDrawer({
                     </p>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      Percobaan ke-{contact.jumlahPercobaan + 1} dari maksimal {BATAS_PERCOBAAN}
+                      Sudah {contact.jumlahPercobaan} kali dicoba dari maksimal {BATAS_PERCOBAAN}
                     </p>
                   ))}
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
