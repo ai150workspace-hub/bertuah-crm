@@ -15,14 +15,25 @@ export const ACTIVE_STATUSES = ["Uncalled", "In Progress", "Warm", "Hot Lead"];
 // "Kerjakan Hari Ini" (antrean agen) = gabungan dua kelompok:
 //   (a) follow-up jatuh tempo: status aktif dan next_follow_up_at <= akhir
 //       hari ini WIB (sama dengan filter "due").
-//   (b) In Progress yang layak dicoba lagi: tidak punya jadwal follow-up
-//       dan belum ditelepon hari ini WIB. Kontak In Progress yang SUDAH
-//       dijadwalkan ke tanggal mendatang sengaja tidak masuk - agen sudah
-//       berjanji meneleponnya di tanggal itu.
+//   (b) In Progress yang layak dicoba lagi: tidak punya jadwal follow-up,
+//       belum ditelepon hari ini WIB, DAN punya < BATAS_PERCOBAAN call log
+//       (pagar yang sama dengan jalur klaim assign_contacts_to_agent,
+//       migrasi 0027 - supaya kontak yang sudah ditelepon 3 kali tidak
+//       muncul lagi sebagai "kerjakan hari ini"). Kontak In Progress yang
+//       SUDAH dijadwalkan ke tanggal mendatang sengaja tidak masuk - agen
+//       sudah berjanji meneleponnya di tanggal itu.
 // Dua kelompok itu tidak pernah tumpang tindih (a butuh jadwal, b tanpa
 // jadwal). Waktu dikirim sebagai UTC ISO (bukan "+07:00") karena dipakai di
 // dalam string .or() PostgREST.
+//
+// Syarat jumlah call log TIDAK bisa ditulis di filter PostgREST (tidak ada
+// filter atas hasil agregat) - filter SQL di bawah hanya menyaring kasar,
+// lalu lampirkanJumlahLog() + saringKerjakanHariIni() menyelesaikannya.
 // ---------------------------------------------------------------------
+
+/** Sama dengan pagar "< 3 baris call_logs" di assign_contacts_to_agent (migrasi 0027). */
+export const BATAS_PERCOBAAN = 3;
+
 function kerjakanHariIniBatas() {
   const today = todayWib();
   return {
@@ -33,7 +44,7 @@ function kerjakanHariIniBatas() {
   };
 }
 
-/** String untuk query.or(...) - tambahkan .eq("assigned_to", agentId) di pemanggil. */
+/** String untuk query.or(...) - tambahkan .eq("assigned_to", agentId) di pemanggil. Penyaringan kasar; lihat catatan di atas. */
 export function kerjakanHariIniOrFilter(): string {
   const { awalHariUtc, akhirHariUtc } = kerjakanHariIniBatas();
   const aktif = ACTIVE_STATUSES.map((s) => `"${s}"`).join(",");
@@ -44,9 +55,101 @@ export function kerjakanHariIniOrFilter(): string {
 
 export interface BarisUrutPrioritas {
   id: string;
+  nama?: string;
   status_call: string;
   next_follow_up_at: string | null;
   last_contacted_at: string | null;
+  /** Jumlah call_logs milik SIAPA PUN - diisi lampirkanJumlahLog() cuma untuk kandidat (b). */
+  jumlah_log?: number;
+}
+
+const msOf = (v: string | null) => (v ? new Date(v).getTime() : null);
+
+function adalahJatuhTempo(r: BarisUrutPrioritas, akhirHariMs: number): boolean {
+  const fu = msOf(r.next_follow_up_at);
+  return ACTIVE_STATUSES.includes(r.status_call) && fu !== null && fu <= akhirHariMs;
+}
+
+/** Kandidat (b) SEBELUM syarat jumlah call log - dipakai untuk memilih baris yang perlu dihitung log-nya. */
+function adalahKandidatCobaLagi(r: BarisUrutPrioritas, awalHariMs: number): boolean {
+  const lc = msOf(r.last_contacted_at);
+  return (
+    r.status_call === "In Progress" &&
+    r.next_follow_up_at === null &&
+    (lc === null || lc < awalHariMs)
+  );
+}
+
+/** Jumlah log yang belum diketahui dianggap TIDAK layak (lebih aman daripada menyuruh agen menelepon lagi). */
+function adalahLayakCobaLagi(r: BarisUrutPrioritas, awalHariMs: number): boolean {
+  return (
+    adalahKandidatCobaLagi(r, awalHariMs) &&
+    r.jumlah_log !== undefined &&
+    r.jumlah_log < BATAS_PERCOBAAN
+  );
+}
+
+/**
+ * Lampirkan jumlah call_logs (milik SIAPA PUN) ke kandidat kelompok (b).
+ * Pakai service role: RLS call_logs cuma mengizinkan agen melihat log
+ * miliknya sendiri, sedangkan pagar di jalur klaim menghitung semua log -
+ * kalau dihitung lewat sesi agen, kontak yang sudah ditelepon agen lain
+ * akan terhitung kurang. `rows` datang dari query yang sudah difilter
+ * assigned_to = agen yang login (RLS); service role hanya membaca jumlahnya.
+ * Gagal membaca -> jumlah tak diketahui -> dianggap tidak layak.
+ */
+export async function lampirkanJumlahLog<T extends BarisUrutPrioritas>(rows: T[]): Promise<T[]> {
+  const { awalHariMs } = kerjakanHariIniBatas();
+  const ids = rows.filter((r) => adalahKandidatCobaLagi(r, awalHariMs)).map((r) => r.id);
+  if (ids.length === 0) return rows;
+
+  const service = createServiceRoleClient();
+  const jumlah = new Map<string, number>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await service
+      .from("contacts")
+      .select("id, call_logs(count)")
+      .in("id", ids.slice(i, i + 200));
+    if (error) {
+      console.error("lampirkanJumlahLog gagal:", error.message);
+      continue;
+    }
+    for (const d of (data ?? []) as { id: string; call_logs: { count: number }[] | null }[]) {
+      jumlah.set(d.id, d.call_logs?.[0]?.count ?? 0);
+    }
+  }
+  return rows.map((r) => (jumlah.has(r.id) ? { ...r, jumlah_log: jumlah.get(r.id)! } : r));
+}
+
+/** Isi akhir filter "Kerjakan Hari Ini": semua (a) + (b) yang lolos pagar percobaan. Butuh lampirkanJumlahLog() lebih dulu. */
+export function saringKerjakanHariIni<T extends BarisUrutPrioritas>(rows: T[]): T[] {
+  const { awalHariMs, akhirHariMs } = kerjakanHariIniBatas();
+  return rows.filter((r) => adalahJatuhTempo(r, akhirHariMs) || adalahLayakCobaLagi(r, awalHariMs));
+}
+
+/**
+ * Urutan manual (pilihan dropdown Urut) untuk daftar yang sudah ditarik ke
+ * memori - dipakai filter "Kerjakan Hari Ini", yang tidak bisa dipotong per
+ * halaman di SQL karena syarat jumlah call log. Meniru ORDER BY di
+ * queue/page.tsx; yang tanpa nilai selalu paling belakang.
+ */
+export function urutkanManual<T extends BarisUrutPrioritas>(
+  rows: T[],
+  kunci: "nama" | "status" | "followup" | "updated"
+): T[] {
+  const byId = (x: T, y: T) => x.id.localeCompare(y.id);
+  const sorted = [...rows];
+  sorted.sort((x, y) => {
+    if (kunci === "nama") return (x.nama ?? "").localeCompare(y.nama ?? "") || byId(x, y);
+    if (kunci === "status") return x.status_call.localeCompare(y.status_call) || byId(x, y);
+    const a = msOf(kunci === "followup" ? x.next_follow_up_at : x.last_contacted_at);
+    const b = msOf(kunci === "followup" ? y.next_follow_up_at : y.last_contacted_at);
+    if (a === null && b === null) return byId(x, y);
+    if (a === null) return 1;
+    if (b === null) return -1;
+    return (kunci === "followup" ? a - b : b - a) || byId(x, y);
+  });
+  return sorted;
 }
 
 /**
@@ -56,18 +159,16 @@ export interface BarisUrutPrioritas {
  * lama. Tidak bisa dinyatakan sebagai ORDER BY PostgREST biasa, jadi
  * pemanggil menarik kolom urut yang ringan lewat fetchAllRows lalu
  * mengurutkan di sini - baris lengkap cuma diambil untuk 1 halaman.
+ * Panggil lampirkanJumlahLog() lebih dulu supaya (b) mengikuti pagar percobaan.
  */
-export function urutkanPrioritasKerja(rows: BarisUrutPrioritas[]): BarisUrutPrioritas[] {
+export function urutkanPrioritasKerja<T extends BarisUrutPrioritas>(rows: T[]): T[] {
   const { awalHariMs, akhirHariMs } = kerjakanHariIniBatas();
-  const ms = (v: string | null) => (v ? new Date(v).getTime() : null);
 
   const info = rows.map((r) => {
-    const fu = ms(r.next_follow_up_at);
-    const lc = ms(r.last_contacted_at);
-    const jatuhTempo = ACTIVE_STATUSES.includes(r.status_call) && fu !== null && fu <= akhirHariMs;
-    const cobaLagi =
-      r.status_call === "In Progress" && fu === null && (lc === null || lc < awalHariMs);
-    return { r, fu, lc, rank: jatuhTempo ? 0 : cobaLagi ? 1 : 2 };
+    const fu = msOf(r.next_follow_up_at);
+    const lc = msOf(r.last_contacted_at);
+    const rank = adalahJatuhTempo(r, akhirHariMs) ? 0 : adalahLayakCobaLagi(r, awalHariMs) ? 1 : 2;
+    return { r, fu, lc, rank };
   });
 
   info.sort((x, y) => {

@@ -8,7 +8,10 @@ import {
   markPreviousCallFlags,
   ACTIVE_STATUSES,
   kerjakanHariIniOrFilter,
+  lampirkanJumlahLog,
+  saringKerjakanHariIni,
   urutkanPrioritasKerja,
+  urutkanManual,
   type BarisUrutPrioritas,
   type ContactRow,
 } from "@/lib/contacts";
@@ -36,6 +39,9 @@ const ACCEPTED_STATUS_VALUES = [
 ];
 const SORT_KEYS = ["prioritas", "updated", "nama", "status", "followup"] as const;
 type SortKey = (typeof SORT_KEYS)[number];
+
+// Kolom ringan untuk jalur "diurutkan/disaring di memori" (lihat bawah).
+const KOLOM_RINGAN = "id, nama, status_call, next_follow_up_at, last_contacted_at";
 
 export default async function AgentQueuePage({
   searchParams,
@@ -81,20 +87,27 @@ export default async function AgentQueuePage({
     // sama sekali - berapa pun besar riwayat kontak seorang agen, halaman
     // ini cuma pernah menarik 1 halaman (PAGE_SIZE baris) sekaligus.
     //
-    // Pengecualian: urutan "prioritas" (default) tidak bisa ditulis sebagai
-    // ORDER BY biasa, jadi dikerjakan dua langkah - lihat cabang di bawah.
+    // Pengecualian: filter "Kerjakan Hari Ini" (syarat jumlah call log) dan
+    // urutan "prioritas" tidak bisa ditulis sebagai filter/ORDER BY biasa,
+    // jadi dikerjakan di memori - lihat cabang di bawah.
     const needle = q.trim();
-    const cariKontak = (columns: string, options?: { count?: "exact" }) => {
+    const cariKontak = (
+      columns: string,
+      options?: { count?: "exact" },
+      mode: string = status,
+      denganPencarian = true
+    ) => {
       let query = supabase
         .from("contacts")
         .select(columns, options)
         .eq("assigned_to", profile.id);
 
-      if (status === "hariini") {
+      if (mode === "hariini") {
+        // Penyaringan kasar; syarat jumlah call log menyusul di memori.
         query = query.or(kerjakanHariIniOrFilter());
-      } else if (status === "aktif") {
+      } else if (mode === "aktif") {
         query = query.in("status_call", ACTIVE_STATUSES);
-      } else if (status === "due") {
+      } else if (mode === "due") {
         // Jatuh tempo = follow-up hari ini ATAU sudah terlambat, cuma untuk
         // status yang masih bisa ditindaklanjuti (sama seperti getDueFollowUpCount
         // di lib/contacts.ts - kalau salah satu diubah, ubah juga yang satunya).
@@ -102,48 +115,52 @@ export default async function AgentQueuePage({
           .in("status_call", ACTIVE_STATUSES)
           .not("next_follow_up_at", "is", null)
           .lte("next_follow_up_at", wibDayEndIso(todayWib()));
-      } else if (status !== "all") {
-        query = query.eq("status_call", status);
+      } else if (mode !== "all") {
+        query = query.eq("status_call", mode);
       }
-      if (needle) {
+      if (denganPencarian && needle) {
         query = query.or(`nama.ilike.%${needle}%,no_hp.ilike.%${needle}%`);
       }
       return query;
     };
 
-    // Angka di label filter "Kerjakan Hari Ini (N)" - sengaja TIDAK ikut
-    // pencarian q, supaya yang tampil adalah beban kerja agen sebenarnya.
-    const hariIniPromise = supabase
-      .from("contacts")
-      .select("*", { count: "exact", head: true })
-      .eq("assigned_to", profile.id)
-      .or(kerjakanHariIniOrFilter());
-
-    const from = (page - 1) * PAGE_SIZE;
-    let rawContacts: ReturnType<typeof mapDbContact>[] = [];
-
-    if (sort === "prioritas") {
-      // Langkah 1: tarik kolom urut yang ringan untuk SEMUA kontak yang
-      // cocok (fetchAllRows - aman dari batas 1.000 baris), urutkan di
-      // lib/contacts.ts:urutkanPrioritasKerja. Langkah 2: ambil baris
-      // lengkap hanya untuk 1 halaman.
-      const [urut, hariIni] = await Promise.all([
-        // Cast: kolom select di cariKontak() bukan string literal, jadi
-        // supabase-js tidak bisa menurunkan tipe barisnya sendiri.
-        fetchAllRows<BarisUrutPrioritas>(
+    // Semua kontak yang cocok (kolom ringan, fetchAllRows - aman dari batas
+    // 1.000 baris), lengkap dengan jumlah call log untuk kandidat "coba lagi".
+    // Cast: kolom select di cariKontak() bukan string literal, jadi
+    // supabase-js tidak bisa menurunkan tipe barisnya sendiri.
+    const muatBaris = async (mode: string, denganPencarian: boolean) =>
+      lampirkanJumlahLog(
+        await fetchAllRows<BarisUrutPrioritas>(
           (f, t) =>
-            cariKontak("id, status_call, next_follow_up_at, last_contacted_at")
+            cariKontak(KOLOM_RINGAN, undefined, mode, denganPencarian)
               .order("id", { ascending: true })
               .range(f, t) as unknown as PromiseLike<{
               data: BarisUrutPrioritas[] | null;
               error: unknown;
             }>
-        ),
-        hariIniPromise,
-      ]);
-      hariIniCount = hariIni.count ?? 0;
-      const sorted = urutkanPrioritasKerja(urut);
+        )
+      );
+
+    const from = (page - 1) * PAGE_SIZE;
+    let rawContacts: ReturnType<typeof mapDbContact>[] = [];
+
+    if (status === "hariini" || sort === "prioritas") {
+      let baris = await muatBaris(status, true);
+      if (status === "hariini") {
+        baris = saringKerjakanHariIni(baris);
+        // Label filter "Kerjakan Hari Ini (N)" sengaja TIDAK ikut pencarian q,
+        // supaya yang tampil adalah beban kerja agen sebenarnya.
+        hariIniCount = needle
+          ? saringKerjakanHariIni(await muatBaris("hariini", false)).length
+          : baris.length;
+      } else {
+        hariIniCount = saringKerjakanHariIni(await muatBaris("hariini", false)).length;
+      }
+
+      const sorted =
+        sort === "prioritas" ? urutkanPrioritasKerja(baris) : urutkanManual(baris, sort);
       totalCount = sorted.length;
+      // Baris lengkap cuma untuk 1 halaman.
       const pageIds = sorted.slice(from, from + PAGE_SIZE).map((r) => r.id);
       if (pageIds.length > 0) {
         const { data: pageRows } = await supabase
@@ -176,8 +193,11 @@ export default async function AgentQueuePage({
       query = query.order("id", { ascending: true });
       query = query.range(from, from + PAGE_SIZE - 1);
 
-      const [{ data: contactRows, count }, hariIni] = await Promise.all([query, hariIniPromise]);
-      hariIniCount = hariIni.count ?? 0;
+      const [{ data: contactRows, count }, hariIniBaris] = await Promise.all([
+        query,
+        muatBaris("hariini", false),
+      ]);
+      hariIniCount = saringKerjakanHariIni(hariIniBaris).length;
       rawContacts = ((contactRows ?? []) as unknown as ContactRow[]).map(mapDbContact);
       totalCount = count ?? 0;
     }

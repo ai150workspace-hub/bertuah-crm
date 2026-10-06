@@ -48,7 +48,7 @@ export function PengambilanDataCard({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const { terbuka, persediaan, kapasitas, jumlahAgen, targetPerAgen } = snapshot;
+  const { terbuka, persediaan, diTanganAgen, diPool, kapasitas, jumlahAgen, targetPerAgen } = snapshot;
   const rekomendasi = hitungRekomendasi(persediaan, kapasitas);
 
   // Amber cuma kalau rekomendasinya MENGUBAH status sekarang; kalau sama
@@ -122,6 +122,9 @@ export function PengambilanDataCard({
             <div className="text-xs text-muted-foreground">Persediaan kerja daur ulang</div>
             <div className="text-lg font-semibold tabular-nums">
               {formatNumber(persediaan)} panggilan
+            </div>
+            <div className="text-[11px] text-muted-foreground">
+              di tangan agen: {formatNumber(diTanganAgen)} · di pool: {formatNumber(diPool)}
             </div>
           </div>
           <div className="space-y-0.5">

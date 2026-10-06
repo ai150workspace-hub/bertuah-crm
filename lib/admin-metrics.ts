@@ -419,6 +419,9 @@ export interface PengambilanDataSnapshot {
   /** true = tahap Uncalled di klaim agen terbuka. Baris config tidak ada / bukan 'false' = terbuka. */
   terbuka: boolean;
   persediaan: number;
+  /** Rincian persediaan (diTanganAgen + diPool = persediaan) - hanya komposisi, bukan definisi. */
+  diTanganAgen: number;
+  diPool: number;
   kapasitas: number;
   jumlahAgen: number;
   targetPerAgen: number;
@@ -444,20 +447,24 @@ export async function getPengambilanDataSnapshot(
         .select("*", { count: "exact", head: true })
         .eq("role", "agent")
         .eq("is_active", true),
-      fetchAllRows<{ id: string }>((from, to) =>
+      fetchAllRows<{ id: string; assigned_to: string | null }>((from, to) =>
         supabase
           .from("contacts")
-          .select("id")
+          .select("id, assigned_to")
           .in("status_call", ["Warm", "In Progress", "Hot Lead"])
           .lte("next_follow_up_at", akhirHari)
           .order("id", { ascending: true })
           .range(from, to)
       ),
       // Embedded count: jumlah call_logs per kontak, tanpa menarik barisnya.
-      fetchAllRows<{ id: string; call_logs: { count: number }[] | null }>((from, to) =>
+      fetchAllRows<{
+        id: string;
+        assigned_to: string | null;
+        call_logs: { count: number }[] | null;
+      }>((from, to) =>
         supabase
           .from("contacts")
-          .select("id, call_logs(count)")
+          .select("id, assigned_to, call_logs(count)")
           .eq("status_call", "In Progress")
           .order("id", { ascending: true })
           .range(from, to)
@@ -482,16 +489,23 @@ export async function getPengambilanDataSnapshot(
     Number.isFinite(targetParsed) && targetParsed > 0 ? targetParsed : TARGET_PANGGILAN_DEFAULT;
 
   const sudahDipanggilHariIni = new Set(dipanggilHariIni.map((r) => r.contact_id));
-  const persediaanIds = new Set<string>(jatuhTempo.map((r) => r.id));
+  // id -> sedang dipegang agen? (satu kontak cuma dihitung sekali walau masuk
+  // dua kelompok). Definisi persediaan tidak berubah; ini cuma komposisinya.
+  const persediaan = new Map<string, boolean>();
+  for (const r of jatuhTempo) persediaan.set(r.id, r.assigned_to !== null);
   for (const c of inProgress) {
     const jumlahLog = c.call_logs?.[0]?.count ?? 0;
-    if (jumlahLog < 3 && !sudahDipanggilHariIni.has(c.id)) persediaanIds.add(c.id);
+    if (jumlahLog < 3 && !sudahDipanggilHariIni.has(c.id)) persediaan.set(c.id, c.assigned_to !== null);
   }
+  let diTanganAgen = 0;
+  for (const dipegang of persediaan.values()) if (dipegang) diTanganAgen += 1;
 
   const agen = jumlahAgen ?? 0;
   return {
     terbuka,
-    persediaan: persediaanIds.size,
+    persediaan: persediaan.size,
+    diTanganAgen,
+    diPool: persediaan.size - diTanganAgen,
     kapasitas: agen * targetPerAgen,
     jumlahAgen: agen,
     targetPerAgen,
