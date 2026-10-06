@@ -18,6 +18,7 @@ import { StatusCallSummary } from "@/components/admin/StatusCallSummary";
 import { CatatanLapangan } from "@/components/admin/CatatanLapangan";
 import { DatabaseStatusCard } from "@/components/admin/DatabaseStatusCard";
 import { WebLeadsCard } from "@/components/admin/WebLeadsCard";
+import { PengambilanDataCard } from "@/components/admin/PengambilanDataCard";
 import { IncentiveCalculator } from "@/components/admin/IncentiveCalculator";
 import { formatCompactRupiah, formatPercent } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -27,6 +28,7 @@ import {
   getCatatanLapangan,
   getDatabaseStatusSnapshot,
   getWebLeadsSnapshot,
+  getPengambilanDataSnapshot,
 } from "@/lib/admin-metrics";
 import { todayWib, startOfMonthWib } from "@/lib/wib-date";
 
@@ -69,11 +71,13 @@ export default async function AdminDashboardPage({
     catatanLapangan,
     databaseStatus,
     webLeads,
+    pengambilanData,
   ] = await Promise.all([
     getAdminDashboardData(supabase, { from, to }),
     getCatatanLapangan(supabase, { from, to }),
     getDatabaseStatusSnapshot(supabase),
     getWebLeadsSnapshot(supabase),
+    getPengambilanDataSnapshot(supabase),
   ]);
 
   return (
@@ -123,6 +127,8 @@ export default async function AdminDashboardPage({
         </div>
         <WebLeadsCard snapshot={webLeads} />
       </div>
+
+      <PengambilanDataCard snapshot={pengambilanData} canToggle={!profile?.isRestrictedAdmin} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">

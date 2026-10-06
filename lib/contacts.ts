@@ -3,13 +3,86 @@ import type { Contact, StatusCall, VehicleType } from "@/types";
 import type { ActiveSlotsInfo } from "@/components/agent/QueueTable";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { fetchAllRows } from "@/lib/supabase/pagination";
-import { todayWib, wibDayEndIso } from "@/lib/wib-date";
+import { todayWib, wibDayStartIso, wibDayEndIso } from "@/lib/wib-date";
 
 // Status yang masih perlu ditindaklanjuti (belum final). Satu-satunya
 // definisi - dipakai app/(dashboard)/agent/queue/page.tsx (filter "aktif")
 // dan app/(dashboard)/agent/dashboard/page.tsx (KPI "My Leads") supaya
 // keduanya tidak pernah bisa berbeda.
 export const ACTIVE_STATUSES = ["Uncalled", "In Progress", "Warm", "Hot Lead"];
+
+// ---------------------------------------------------------------------
+// "Kerjakan Hari Ini" (antrean agen) = gabungan dua kelompok:
+//   (a) follow-up jatuh tempo: status aktif dan next_follow_up_at <= akhir
+//       hari ini WIB (sama dengan filter "due").
+//   (b) In Progress yang layak dicoba lagi: tidak punya jadwal follow-up
+//       dan belum ditelepon hari ini WIB. Kontak In Progress yang SUDAH
+//       dijadwalkan ke tanggal mendatang sengaja tidak masuk - agen sudah
+//       berjanji meneleponnya di tanggal itu.
+// Dua kelompok itu tidak pernah tumpang tindih (a butuh jadwal, b tanpa
+// jadwal). Waktu dikirim sebagai UTC ISO (bukan "+07:00") karena dipakai di
+// dalam string .or() PostgREST.
+// ---------------------------------------------------------------------
+function kerjakanHariIniBatas() {
+  const today = todayWib();
+  return {
+    awalHariMs: new Date(wibDayStartIso(today)).getTime(),
+    akhirHariMs: new Date(wibDayEndIso(today)).getTime(),
+    awalHariUtc: new Date(wibDayStartIso(today)).toISOString(),
+    akhirHariUtc: new Date(wibDayEndIso(today)).toISOString(),
+  };
+}
+
+/** String untuk query.or(...) - tambahkan .eq("assigned_to", agentId) di pemanggil. */
+export function kerjakanHariIniOrFilter(): string {
+  const { awalHariUtc, akhirHariUtc } = kerjakanHariIniBatas();
+  const aktif = ACTIVE_STATUSES.map((s) => `"${s}"`).join(",");
+  const jatuhTempo = `and(status_call.in.(${aktif}),next_follow_up_at.lte.${akhirHariUtc})`;
+  const cobaLagi = `and(status_call.eq."In Progress",next_follow_up_at.is.null,or(last_contacted_at.is.null,last_contacted_at.lt.${awalHariUtc}))`;
+  return `${jatuhTempo},${cobaLagi}`;
+}
+
+export interface BarisUrutPrioritas {
+  id: string;
+  status_call: string;
+  next_follow_up_at: string | null;
+  last_contacted_at: string | null;
+}
+
+/**
+ * Urutan bawaan antrean agen: (a) follow-up jatuh tempo, paling terlambat
+ * di atas; (b) In Progress yang layak dicoba lagi (paling lama tidak
+ * disentuh di atas); (c) sisanya, last_contacted_at menurun seperti urutan
+ * lama. Tidak bisa dinyatakan sebagai ORDER BY PostgREST biasa, jadi
+ * pemanggil menarik kolom urut yang ringan lewat fetchAllRows lalu
+ * mengurutkan di sini - baris lengkap cuma diambil untuk 1 halaman.
+ */
+export function urutkanPrioritasKerja(rows: BarisUrutPrioritas[]): BarisUrutPrioritas[] {
+  const { awalHariMs, akhirHariMs } = kerjakanHariIniBatas();
+  const ms = (v: string | null) => (v ? new Date(v).getTime() : null);
+
+  const info = rows.map((r) => {
+    const fu = ms(r.next_follow_up_at);
+    const lc = ms(r.last_contacted_at);
+    const jatuhTempo = ACTIVE_STATUSES.includes(r.status_call) && fu !== null && fu <= akhirHariMs;
+    const cobaLagi =
+      r.status_call === "In Progress" && fu === null && (lc === null || lc < awalHariMs);
+    return { r, fu, lc, rank: jatuhTempo ? 0 : cobaLagi ? 1 : 2 };
+  });
+
+  info.sort((x, y) => {
+    if (x.rank !== y.rank) return x.rank - y.rank;
+    if (x.rank === 0) return (x.fu as number) - (y.fu as number) || x.r.id.localeCompare(y.r.id);
+    if (x.rank === 1) return (x.lc ?? -Infinity) - (y.lc ?? -Infinity) || x.r.id.localeCompare(y.r.id);
+    // c: last_contacted_at menurun, yang belum pernah ditelepon paling belakang.
+    if (x.lc === null && y.lc === null) return x.r.id.localeCompare(y.r.id);
+    if (x.lc === null) return 1;
+    if (y.lc === null) return -1;
+    return y.lc - x.lc || x.r.id.localeCompare(y.r.id);
+  });
+
+  return info.map((i) => i.r);
+}
 
 /** Raw shape selected from public.contacts. */
 export interface ContactRow {
