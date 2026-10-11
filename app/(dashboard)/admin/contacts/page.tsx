@@ -9,7 +9,19 @@ import { getAgentCapacitiesBulk } from "@/lib/contacts";
 
 const PAGE_SIZE = 50;
 const DEFAULT_STATUSES = ["Uncalled", "Inbound", "Hot Lead", "Warm", "In Progress"];
-const ALL_STATUSES = ["Uncalled", "Inbound", "Hot Lead", "Warm", "In Progress", "Closed", "Invalid"];
+// "Tidak Terjangkau" cuma bisa dilihat/difilter di sini (status akhir yang
+// dipasang sistem, migrasi 0028) - tidak ada aksi yang mengubahnya ke/dari
+// status itu dari UI.
+const ALL_STATUSES = [
+  "Uncalled",
+  "Inbound",
+  "Hot Lead",
+  "Warm",
+  "In Progress",
+  "Closed",
+  "Invalid",
+  "Tidak Terjangkau",
+];
 
 export default async function AdminContactsPage({
   searchParams,
@@ -70,12 +82,14 @@ export default async function AdminContactsPage({
     supabase
       .from("contacts")
       .select("*", { count: "exact", head: true })
-      .not("status_call", "in", "(Invalid,Closed)"),
+      .not("status_call", "in", '(Invalid,Closed,"Tidak Terjangkau")'),
+    // Unassigned = menunggu di pool. Invalid dan Tidak Terjangkau juga
+    // assigned_to null, tapi sudah final - tidak menunggu siapa pun.
     supabase
       .from("contacts")
       .select("*", { count: "exact", head: true })
       .is("assigned_to", null)
-      .neq("status_call", "Invalid"),
+      .not("status_call", "in", '(Invalid,"Tidak Terjangkau")'),
     supabase
       .from("do_not_contact")
       .select("no_hp, alasan, created_at", { count: "exact" })

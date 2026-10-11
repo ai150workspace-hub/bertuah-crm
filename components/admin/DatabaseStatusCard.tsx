@@ -25,7 +25,8 @@ export function DatabaseStatusCard({ snapshot }: { snapshot: DatabaseStatusSnaps
 
 function DatabaseStatusBody({ snapshot }: { snapshot: DatabaseStatusSnapshot }) {
   // Persentase dihitung dari kontak yang BISA dikerjakan saat ini
-  // (totalBisaDikerjakan = totalSaatIni - diarsipkan) - arsip tidak ikut di
+  // (totalBisaDikerjakan = totalSaatIni - diarsipkan - tidakTerjangkau) - arsip
+  // dan kontak yang sudah habis percobaannya tidak ikut di
   // penyebut karena tidak bisa dikerjakan siapa pun. Bukan dari
   // totalUploaded, yang bisa beda (lihat catatan di admin-metrics.ts).
   const pct =
@@ -48,6 +49,9 @@ function DatabaseStatusBody({ snapshot }: { snapshot: DatabaseStatusSnapshot }) 
         yang ditolak saat impor) · {formatNumber(snapshot.sudahDikerjakan)} sudah dikerjakan ·{" "}
         {formatNumber(snapshot.belumDisentuh)} belum disentuh
         {snapshot.diarsipkan > 0 && <> · {formatNumber(snapshot.diarsipkan)} diarsipkan</>}
+        {snapshot.tidakTerjangkau > 0 && (
+          <> · {formatNumber(snapshot.tidakTerjangkau)} tidak terjangkau</>
+        )}
       </p>
       {snapshot.belumDisentuh === 0 && snapshot.diarsipkan > 0 && (
         <p className="text-xs text-amber-600 dark:text-amber-400">

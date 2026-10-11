@@ -434,6 +434,10 @@ export function QueueTable({
           <TableBody>
             {pageItems.map((c) => {
               const invalid = c.statusCall === "Invalid";
+              // Status akhir yang dipasang sistem (migrasi 0028): sudah 3x
+              // ditelepon. Normalnya tidak ada di antrean agen (assigned_to
+              // dikosongkan); ini jaga-jaga kalau admin meng-assign manual.
+              const habisPercobaan = c.statusCall === "Tidak Terjangkau";
               return (
                 <TableRow key={c.id}>
                   <TableCell>
@@ -507,11 +511,19 @@ export function QueueTable({
                     })()}
                   </TableCell>
                   <TableCell className="text-right">
-                    <span title={invalid ? "Nomor tidak valid" : undefined}>
+                    <span
+                      title={
+                        invalid
+                          ? "Nomor tidak valid"
+                          : habisPercobaan
+                            ? "Sudah 3 kali dicoba - tidak terjangkau"
+                            : undefined
+                      }
+                    >
                       <Button
                         size="sm"
                         variant="secondary"
-                        disabled={invalid}
+                        disabled={invalid || habisPercobaan}
                         onClick={() => {
                           setSelected(c);
                           setOpen(true);

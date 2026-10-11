@@ -516,6 +516,8 @@ export default async function AdminAgentsPage({
     { label: "Uncalled", status: "Uncalled", colorClassName: "bg-muted-foreground/40" },
     { label: "Closed", status: "Closed", colorClassName: "bg-muted-foreground/70" },
     { label: "Invalid", status: "Invalid", colorClassName: "bg-destructive/50" },
+    // Status akhir yang dipasang sistem (migrasi 0028) - hanya untuk dibaca.
+    { label: "Tidak Terjangkau", status: "Tidak Terjangkau", colorClassName: "bg-muted-foreground/30" },
   ];
   const healthCounts = new Map<string, number>();
   for (const c of contacts) {
