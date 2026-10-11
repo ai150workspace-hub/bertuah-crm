@@ -321,8 +321,10 @@ export interface DatabaseStatusSnapshot {
   belumDisentuh: number;
   /** Uncalled yang bertag 'ARSIP' - sengaja ditarik dari jangkauan agen, bukan "belum disentuh". */
   diarsipkan: number;
+  /** status_call = 'Tidak Terjangkau' (migrasi 0028) - sudah 3x ditelepon, status akhir; tidak bisa dikerjakan lagi. */
+  tidakTerjangkau: number;
   totalSaatIni: number;
-  /** totalSaatIni - diarsipkan: penyebut persentase, karena arsip tidak bisa dikerjakan siapa pun. */
+  /** totalSaatIni - diarsipkan - tidakTerjangkau: penyebut persentase, karena keduanya tidak bisa dikerjakan siapa pun. */
   totalBisaDikerjakan: number;
 }
 
@@ -335,6 +337,7 @@ export async function getDatabaseStatusSnapshot(
     { count: totalSaatIni },
     { count: belumDisentuh },
     { count: diarsipkan },
+    { count: tidakTerjangkau },
   ] = await Promise.all([
     supabase.from("data_batches").select("total_rows").eq("status", "Completed"),
     supabase.from("data_batches").select("*", { count: "exact", head: true }),
@@ -353,6 +356,10 @@ export async function getDatabaseStatusSnapshot(
       .select("*", { count: "exact", head: true })
       .eq("status_call", "Uncalled")
       .contains("tags", ["ARSIP"]),
+    supabase
+      .from("contacts")
+      .select("*", { count: "exact", head: true })
+      .eq("status_call", "Tidak Terjangkau"),
   ]);
 
   const totalUploaded = (completedBatches ?? []).reduce(
@@ -362,15 +369,17 @@ export async function getDatabaseStatusSnapshot(
   const total = totalSaatIni ?? 0;
   const belum = belumDisentuh ?? 0;
   const arsip = diarsipkan ?? 0;
+  const tidakJangkau = tidakTerjangkau ?? 0;
 
   return {
     adaRiwayatUpload: (batchTotalCount ?? 0) > 0,
     totalUploaded,
-    sudahDikerjakan: total - belum - arsip,
+    sudahDikerjakan: total - belum - arsip - tidakJangkau,
     belumDisentuh: belum,
     diarsipkan: arsip,
+    tidakTerjangkau: tidakJangkau,
     totalSaatIni: total,
-    totalBisaDikerjakan: total - arsip,
+    totalBisaDikerjakan: total - arsip - tidakJangkau,
   };
 }
 

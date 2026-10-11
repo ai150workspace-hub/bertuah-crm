@@ -12,6 +12,7 @@ export const STATUS_CALL_COLORS: Record<StatusCall, string> = {
   Invalid: "bg-muted text-muted-foreground line-through",
   Duplicate: "bg-muted text-muted-foreground",
   Inbound: "bg-blue-50 text-blue-700 border-blue-200 font-medium",
+  "Tidak Terjangkau": "bg-muted text-muted-foreground",
 };
 
 export const STATUS_APLIKASI_COLORS: Record<ApplicationStatus, string> = {

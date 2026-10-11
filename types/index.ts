@@ -21,7 +21,9 @@ export type StatusCall =
   | "Rejected"
   | "Invalid"
   | "Duplicate"
-  | "Inbound";
+  | "Inbound"
+  /** Status akhir yang DIPASANG SISTEM (migrasi 0028) untuk kontak In Progress yang sudah >= 3 kali ditelepon. Bukan hasil panggilan yang dipilih agen. */
+  | "Tidak Terjangkau";
 
 export interface Contact {
   id: string;
