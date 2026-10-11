@@ -21,8 +21,12 @@
 --        DAN punya >= 3 baris call_logs (milik agen mana pun)
 --        DAN tidak bertag ARSIP
 --      ke 'Tidak Terjangkau': assigned_to/assigned_at dikosongkan, tag
---      'HABIS_3X' ditambahkan, dan status/assignee lama dicatat di notes
---      supaya bisa dibalik (lihat supabase/rollbacks/0028_rollback_*).
+--      'HABIS_3X' ditambahkan, dan keadaan lama (status_call, assigned_to,
+--      assigned_at) disimpan di tabel cadangan public.backup_habis3x -
+--      DIISI OLEH FUNGSI ITU SENDIRI, jadi kontak yang dipindah cron
+--      harian ikut tercadangkan, bukan hanya backfill. Rollback membaca
+--      dari tabel itu (lihat supabase/rollbacks/0028_rollback_*). Catatan
+--      di notes tetap ditulis, hanya sebagai jejak yang bisa dibaca orang.
 --      Warm, Hot Lead, Inbound, dan kontak ARSIP SENGAJA tidak disentuh.
 --   3. Backfill sekali jalan (dengan pagar jumlah, lihat bawah).
 --   4. Cron 'auto-reshuffle-overdue-followup' (jalan 23:00 UTC = 06:00
@@ -31,12 +35,13 @@
 --      simpan call log: tidak menambah titik gagal di jalur agen, dan
 --      menangkap semua jalur penulisan call log.
 --
--- PAGAR JUMLAH (bagian 3): saat dibuat, kandidat di produksi = 424. Kalau
--- saat migrasi dijalankan jumlahnya di luar [v_min, v_max], migrasi
--- BERHENTI (raise exception, tidak ada yang berubah) - jumlah yang jauh
--- berbeda berarti ada yang tidak terduga dan perlu dilihat dulu. Ubah
--- v_min/v_max di bawah kalau memang sengaja ditunda beberapa hari
--- (bertambah ~45 per hari).
+-- PAGAR JUMLAH (bagian 3): saat dibuat (11 Okt), kandidat di produksi =
+-- 424 dan bertambah ~45 per hari. Kalau saat migrasi dijalankan jumlahnya
+-- di luar [v_min, v_max] = [400, 600], migrasi BERHENTI (raise exception,
+-- tidak ada yang berubah) - jumlah yang jauh berbeda berarti ada yang tidak
+-- terduga dan perlu dilihat dulu. 600 memberi ruang sekitar 3-4 hari.
+-- Dijalankan ULANG setelah sukses, pagar ini juga akan menghentikannya
+-- (kandidat ~0 < v_min) - itu disengaja dan aman, bukan kegagalan.
 --
 -- Dasar cron: definisi 0027 (bagian C) - satu-satunya perubahan adalah
 -- baris select public.tandai_tidak_terjangkau(); di depannya.
@@ -61,11 +66,41 @@ comment on column public.contacts.status_call is
   '''Inbound'' = lead dari website (lihat 0012). ''Tidak Terjangkau'' = '
   'kontak In Progress yang sudah >= 3 kali ditelepon, status akhir yang '
   'DIPASANG SISTEM (public.tandai_tidak_terjangkau, 0028) - bukan hasil '
-  'panggilan yang dipilih agen. Ditandai tag HABIS_3X; status lama dicatat '
-  'di notes.';
+  'panggilan yang dipilih agen. Ditandai tag HABIS_3X; keadaan lama ada di '
+  'public.backup_habis3x.';
 
 -- ---------------------------------------------------------------------
--- 2. Fungsi pemindah. Mengembalikan jumlah baris yang dipindahkan.
+-- 2a. Tabel cadangan - keadaan lama tiap kontak yang dipindah. Satu baris
+--     per pemindahan (kontak yang dipindah, dikembalikan, lalu dipindah
+--     lagi punya dua baris; rollback memakai yang terbaru).
+--     RLS aktif TANPA policy + hak anon/authenticated dicabut: hanya
+--     service role / SQL Editor yang bisa membaca.
+-- ---------------------------------------------------------------------
+create table if not exists public.backup_habis3x (
+  id               bigserial primary key,
+  contact_id       uuid not null,
+  status_call_lama text not null,
+  assigned_to_lama uuid,
+  assigned_at_lama timestamptz,
+  jumlah_log       integer not null,
+  dipindah_at      timestamptz not null default now()
+);
+
+create index if not exists idx_backup_habis3x_contact
+  on public.backup_habis3x(contact_id);
+
+alter table public.backup_habis3x enable row level security;
+revoke all on public.backup_habis3x from anon, authenticated;
+
+comment on table public.backup_habis3x is
+  'Cadangan keadaan lama kontak yang dipindah ke ''Tidak Terjangkau'' oleh '
+  'public.tandai_tidak_terjangkau() (0028). Dipakai supabase/rollbacks/'
+  '0028_rollback_tidak_terjangkau.sql. Bukan data operasional.';
+
+-- ---------------------------------------------------------------------
+-- 2b. Fungsi pemindah. Mengembalikan jumlah baris yang dipindahkan.
+--     Satu statement: kandidat dipilih sekali, dicadangkan, lalu dipindah
+--     (data-modifying CTE) - keduanya dari kandidat yang sama persis.
 -- ---------------------------------------------------------------------
 create or replace function public.tandai_tidak_terjangkau()
 returns integer
@@ -74,27 +109,42 @@ as $$
 declare
   v_jumlah integer;
 begin
-  update public.contacts c
-  set
-    status_call = 'Tidak Terjangkau',
-    assigned_to = null,
-    assigned_at = null,
-    tags = array_append(coalesce(c.tags, '{}'), 'HABIS_3X'),
-    notes = coalesce(c.notes, '') ||
-      E'\n[HABIS_3X ' || (now() + interval '7 hours')::date ||
-      ': status lama=In Progress; assigned_to lama=' ||
-      coalesce(c.assigned_to::text, '-') || '; ' || n.jumlah || ' panggilan]'
-  from (
-    select contact_id, count(*) as jumlah
-    from public.call_logs
-    group by contact_id
-    having count(*) >= 3
-  ) n
-  where c.id = n.contact_id
-    and c.status_call = 'In Progress'
-    and not (coalesce(c.tags, '{}') @> '{ARSIP}');
+  with kandidat as (
+    select c.id, c.status_call, c.assigned_to, c.assigned_at, n.jumlah
+    from public.contacts c
+    join (
+      select contact_id, count(*) as jumlah
+      from public.call_logs
+      group by contact_id
+      having count(*) >= 3
+    ) n on n.contact_id = c.id
+    where c.status_call = 'In Progress'
+      and not (coalesce(c.tags, '{}') @> '{ARSIP}')
+  ),
+  cadangan as (
+    insert into public.backup_habis3x
+      (contact_id, status_call_lama, assigned_to_lama, assigned_at_lama, jumlah_log)
+    select id, status_call, assigned_to, assigned_at, jumlah::integer
+    from kandidat
+    returning contact_id
+  ),
+  pindah as (
+    update public.contacts c
+    set
+      status_call = 'Tidak Terjangkau',
+      assigned_to = null,
+      assigned_at = null,
+      tags = array_append(coalesce(c.tags, '{}'), 'HABIS_3X'),
+      notes = coalesce(c.notes, '') ||
+        E'\n[HABIS_3X ' || (now() + interval '7 hours')::date ||
+        ': status lama=In Progress; assigned_to lama=' ||
+        coalesce(c.assigned_to::text, '-') || '; ' || k.jumlah || ' panggilan]'
+    from kandidat k
+    where c.id = k.id
+    returning c.id
+  )
+  select count(*) into v_jumlah from pindah;
 
-  get diagnostics v_jumlah = row_count;
   return v_jumlah;
 end;
 $$;
@@ -114,7 +164,7 @@ comment on function public.tandai_tidak_terjangkau is
 do $$
 declare
   v_min       constant integer := 400;
-  v_max       constant integer := 470;
+  v_max       constant integer := 600;
   v_kandidat  integer;
   v_dipindah  integer;
 begin

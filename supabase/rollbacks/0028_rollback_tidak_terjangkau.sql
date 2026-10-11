@@ -4,39 +4,50 @@
 -- BUKAN migrasi: jangan taruh di supabase/migrations. Dijalankan MANUAL di
 -- Supabase SQL Editor kalau 0028 perlu dibatalkan. Urutan penting.
 --
--- Mengembalikan kontak yang ditandai tag HABIS_3X (status 'Tidak
--- Terjangkau') ke 'In Progress', dan memulihkan assigned_to dari catatan di
--- notes ("assigned_to lama=<uuid>") kalau agennya masih ada. Catatan
--- HABIS_3X di notes sengaja DIBIARKAN sebagai jejak audit.
+-- Membaca keadaan lama dari public.backup_habis3x (diisi oleh
+-- public.tandai_tidak_terjangkau() setiap kali memindahkan kontak -
+-- backfill DAN cron harian). Mengembalikan status_call, assigned_to, dan
+-- assigned_at persis seperti sebelum dipindah, lalu menghapus tag
+-- HABIS_3X. Catatan HABIS_3X di notes sengaja DIBIARKAN sebagai jejak.
 --
--- Catatan: kontak yang sudah ditandai ulang manual / berubah status setelah
--- 0028 tidak disentuh (syarat: masih 'Tidak Terjangkau' DAN bertag HABIS_3X).
+-- Hanya menyentuh kontak yang MASIH 'Tidak Terjangkau' dan bertag
+-- HABIS_3X. Kalau sebuah kontak pernah dipindah lebih dari sekali, baris
+-- cadangan TERBARU yang dipakai. Kalau agen lamanya sudah tidak ada di
+-- public.users, assigned_to dibiarkan kosong (kontak kembali ke pool).
 -- =====================================================================
 
--- 0. (Opsional, dulu) lihat dulu apa yang akan dikembalikan:
--- select count(*) from public.contacts
--- where status_call = 'Tidak Terjangkau' and tags @> '{HABIS_3X}';
+-- 0. Periksa dulu. Dua angka ini HARUS sama; kalau beda, ada kontak
+--    ber-tag HABIS_3X tanpa cadangan - JANGAN lanjut sebelum dicek.
+-- select
+--   (select count(*) from public.contacts
+--     where status_call = 'Tidak Terjangkau' and tags @> '{HABIS_3X}') as akan_dikembalikan,
+--   (select count(distinct b.contact_id)
+--      from public.backup_habis3x b
+--      join public.contacts c on c.id = b.contact_id
+--     where c.status_call = 'Tidak Terjangkau' and c.tags @> '{HABIS_3X}') as punya_cadangan;
 
 -- 1. Kembalikan kontak.
 update public.contacts c
 set
-  status_call = 'In Progress',
-  tags = array_remove(c.tags, 'HABIS_3X'),
-  assigned_to = r.assigned_lama,
-  assigned_at = case when r.assigned_lama is not null then now() else null end
+  status_call = b.status_call_lama,
+  assigned_to = case
+    when exists (select 1 from public.users u where u.id = b.assigned_to_lama)
+    then b.assigned_to_lama
+  end,
+  assigned_at = case
+    when exists (select 1 from public.users u where u.id = b.assigned_to_lama)
+    then b.assigned_at_lama
+  end,
+  tags = array_remove(c.tags, 'HABIS_3X')
 from (
-  select
-    c2.id,
-    (
-      select u.id
-      from public.users u
-      where u.id::text = substring(c2.notes from 'assigned_to lama=([0-9a-fA-F-]{36})')
-    ) as assigned_lama
-  from public.contacts c2
-  where c2.status_call = 'Tidak Terjangkau'
-    and c2.tags @> '{HABIS_3X}'
-) r
-where c.id = r.id;
+  select distinct on (contact_id)
+    contact_id, status_call_lama, assigned_to_lama, assigned_at_lama
+  from public.backup_habis3x
+  order by contact_id, dipindah_at desc, id desc
+) b
+where c.id = b.contact_id
+  and c.status_call = 'Tidak Terjangkau'
+  and c.tags @> '{HABIS_3X}';
 
 -- 2. Cron kembali ke definisi 0027 (tanpa langkah tandai_tidak_terjangkau).
 select cron.schedule(
@@ -62,9 +73,9 @@ select cron.schedule(
   $$
 );
 
--- 3. (Opsional) hapus fungsi dan status baru dari constraint. HANYA setelah
---    langkah 1 selesai - constraint tidak akan lolos kalau masih ada baris
---    berstatus 'Tidak Terjangkau'.
+-- 3. (Opsional) bersihkan. HANYA setelah langkah 1 selesai dan terverifikasi
+--    - constraint tidak akan lolos kalau masih ada baris 'Tidak Terjangkau'.
+--    Tabel cadangan SEBAIKNYA dipertahankan sebagai arsip audit.
 -- drop function if exists public.tandai_tidak_terjangkau();
 -- alter table public.contacts drop constraint if exists contacts_status_call_check;
 -- alter table public.contacts add constraint contacts_status_call_check
@@ -73,3 +84,4 @@ select cron.schedule(
 --     'Closed','Submitted','Rejected','Invalid','Duplicate',
 --     'Inbound'
 --   ));
+-- drop table if exists public.backup_habis3x;
