@@ -41,7 +41,9 @@ const SORT_KEYS = ["prioritas", "updated", "nama", "status", "followup"] as cons
 type SortKey = (typeof SORT_KEYS)[number];
 
 // Kolom ringan untuk jalur "diurutkan/disaring di memori" (lihat bawah).
-const KOLOM_RINGAN = "id, nama, status_call, next_follow_up_at, last_contacted_at";
+// assigned_at + tags: urutan & keanggotaan kelompok Uncalled di "Kerjakan Hari Ini".
+const KOLOM_RINGAN =
+  "id, nama, status_call, next_follow_up_at, last_contacted_at, assigned_at, tags";
 
 export default async function AgentQueuePage({
   searchParams,

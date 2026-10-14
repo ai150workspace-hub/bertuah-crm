@@ -13,7 +13,7 @@ import { todayWib, wibDayStartIso, wibDayEndIso } from "@/lib/wib-date";
 export const ACTIVE_STATUSES = ["Uncalled", "In Progress", "Warm", "Hot Lead"];
 
 // ---------------------------------------------------------------------
-// "Kerjakan Hari Ini" (antrean agen) = gabungan dua kelompok:
+// "Kerjakan Hari Ini" (antrean agen) = gabungan tiga kelompok, urut prioritas:
 //   (a) follow-up jatuh tempo: status aktif dan next_follow_up_at <= akhir
 //       hari ini WIB (sama dengan filter "due").
 //   (b) In Progress yang layak dicoba lagi: tidak punya jadwal follow-up,
@@ -23,9 +23,15 @@ export const ACTIVE_STATUSES = ["Uncalled", "In Progress", "Warm", "Hot Lead"];
 //       muncul lagi sebagai "kerjakan hari ini"). Kontak In Progress yang
 //       SUDAH dijadwalkan ke tanggal mendatang sengaja tidak masuk - agen
 //       sudah berjanji meneleponnya di tanggal itu.
-// Dua kelompok itu tidak pernah tumpang tindih (a butuh jadwal, b tanpa
-// jadwal). Waktu dikirim sebagai UTC ISO (bukan "+07:00") karena dipakai di
-// dalam string .or() PostgREST.
+//   (c) Uncalled milik agen, bukan ARSIP: belum pernah ditelepon, jadi
+//       memang pekerjaan hari ini. Kelompok PALING BELAKANG - mengisi
+//       sesudah (a) dan (b). Uncalled yang jadwalnya jatuh tempo sudah
+//       masuk (a) dan tetap di sana. ARSIP dikecualikan walau dipegang
+//       agen (arsip sengaja ditarik dari jangkauan kerja).
+// (a) dan (b) tidak pernah tumpang tindih (a butuh jadwal, b tanpa jadwal);
+// (c) bisa tumpang tindih (a) hanya untuk Uncalled berjadwal - dihitung
+// sekali, rank-nya (a). Waktu dikirim sebagai UTC ISO (bukan "+07:00")
+// karena dipakai di dalam string .or() PostgREST.
 //
 // Syarat jumlah call log TIDAK bisa ditulis di filter PostgREST (tidak ada
 // filter atas hasil agregat) - filter SQL di bawah hanya menyaring kasar,
@@ -49,7 +55,10 @@ export function kerjakanHariIniOrFilter(): string {
   const aktif = ACTIVE_STATUSES.map((s) => `"${s}"`).join(",");
   const jatuhTempo = `and(status_call.in.(${aktif}),next_follow_up_at.lte.${akhirHariUtc})`;
   const cobaLagi = `and(status_call.eq."In Progress",next_follow_up_at.is.null,or(last_contacted_at.is.null,last_contacted_at.lt.${awalHariUtc}))`;
-  return `${jatuhTempo},${cobaLagi}`;
+  // tags nullable - .not("tags","cs",...) saja membuang baris bertags NULL,
+  // jadi NULL disebut eksplisit (pola yang sama dengan admin-metrics.ts).
+  const uncalled = `and(status_call.eq."Uncalled",or(tags.is.null,tags.not.cs.{ARSIP}))`;
+  return `${jatuhTempo},${cobaLagi},${uncalled}`;
 }
 
 export interface BarisUrutPrioritas {
@@ -58,6 +67,9 @@ export interface BarisUrutPrioritas {
   status_call: string;
   next_follow_up_at: string | null;
   last_contacted_at: string | null;
+  /** Kapan kontak di-assign ke agen - mengurutkan kelompok (c) Uncalled: yang paling lama menunggu di atas. */
+  assigned_at?: string | null;
+  tags?: string[] | null;
   /** Jumlah call_logs milik SIAPA PUN - diisi lampirkanJumlahLog() cuma untuk kandidat (b). */
   jumlah_log?: number;
 }
@@ -120,10 +132,20 @@ export async function lampirkanJumlahLog<T extends BarisUrutPrioritas>(rows: T[]
   return rows.map((r) => (jumlah.has(r.id) ? { ...r, jumlah_log: jumlah.get(r.id)! } : r));
 }
 
-/** Isi akhir filter "Kerjakan Hari Ini": semua (a) + (b) yang lolos pagar percobaan. Butuh lampirkanJumlahLog() lebih dulu. */
+/** Kelompok (c): Uncalled yang bukan ARSIP. Harus sama dengan klausa "uncalled" di kerjakanHariIniOrFilter(). */
+function adalahUncalledKerja(r: BarisUrutPrioritas): boolean {
+  return r.status_call === "Uncalled" && !(r.tags ?? []).includes("ARSIP");
+}
+
+/** Isi akhir filter "Kerjakan Hari Ini": (a) + (b) yang lolos pagar percobaan + (c) Uncalled. Butuh lampirkanJumlahLog() lebih dulu. */
 export function saringKerjakanHariIni<T extends BarisUrutPrioritas>(rows: T[]): T[] {
   const { awalHariMs, akhirHariMs } = kerjakanHariIniBatas();
-  return rows.filter((r) => adalahJatuhTempo(r, akhirHariMs) || adalahLayakCobaLagi(r, awalHariMs));
+  return rows.filter(
+    (r) =>
+      adalahJatuhTempo(r, akhirHariMs) ||
+      adalahLayakCobaLagi(r, awalHariMs) ||
+      adalahUncalledKerja(r)
+  );
 }
 
 /**
@@ -154,8 +176,9 @@ export function urutkanManual<T extends BarisUrutPrioritas>(
 /**
  * Urutan bawaan antrean agen: (a) follow-up jatuh tempo, paling terlambat
  * di atas; (b) In Progress yang layak dicoba lagi (paling lama tidak
- * disentuh di atas); (c) sisanya, last_contacted_at menurun seperti urutan
- * lama. Tidak bisa dinyatakan sebagai ORDER BY PostgREST biasa, jadi
+ * disentuh di atas); (c) Uncalled, yang paling lama di-assign
+ * (assigned_at menaik) di atas; (d) sisanya, last_contacted_at menurun
+ * seperti urutan lama. Tidak bisa dinyatakan sebagai ORDER BY PostgREST biasa, jadi
  * pemanggil menarik kolom urut yang ringan lewat fetchAllRows lalu
  * mengurutkan di sini - baris lengkap cuma diambil untuk 1 halaman.
  * Panggil lampirkanJumlahLog() lebih dulu supaya (b) mengikuti pagar percobaan.
@@ -166,15 +189,28 @@ export function urutkanPrioritasKerja<T extends BarisUrutPrioritas>(rows: T[]): 
   const info = rows.map((r) => {
     const fu = msOf(r.next_follow_up_at);
     const lc = msOf(r.last_contacted_at);
-    const rank = adalahJatuhTempo(r, akhirHariMs) ? 0 : adalahLayakCobaLagi(r, awalHariMs) ? 1 : 2;
-    return { r, fu, lc, rank };
+    const rank = adalahJatuhTempo(r, akhirHariMs)
+      ? 0
+      : adalahLayakCobaLagi(r, awalHariMs)
+        ? 1
+        : adalahUncalledKerja(r)
+          ? 2
+          : 3;
+    return { r, fu, lc, au: msOf(r.assigned_at ?? null), rank };
   });
 
   info.sort((x, y) => {
     if (x.rank !== y.rank) return x.rank - y.rank;
     if (x.rank === 0) return (x.fu as number) - (y.fu as number) || x.r.id.localeCompare(y.r.id);
     if (x.rank === 1) return (x.lc ?? -Infinity) - (y.lc ?? -Infinity) || x.r.id.localeCompare(y.r.id);
-    // c: last_contacted_at menurun, yang belum pernah ditelepon paling belakang.
+    // c: Uncalled - yang paling lama di-assign di atas; assigned_at kosong paling belakang.
+    if (x.rank === 2) {
+      if (x.au === null && y.au === null) return x.r.id.localeCompare(y.r.id);
+      if (x.au === null) return 1;
+      if (y.au === null) return -1;
+      return x.au - y.au || x.r.id.localeCompare(y.r.id);
+    }
+    // d: last_contacted_at menurun, yang belum pernah ditelepon paling belakang.
     if (x.lc === null && y.lc === null) return x.r.id.localeCompare(y.r.id);
     if (x.lc === null) return 1;
     if (y.lc === null) return -1;
