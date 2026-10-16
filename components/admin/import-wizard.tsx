@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { labelRating, labelPekerjaan, type RingkasanKolomBaru } from "@/lib/profil-kontak";
 import {
   validateImportRows,
   commitImport,
@@ -43,9 +44,11 @@ import {
   type AgentCapacityInfo,
 } from "@/app/actions/import";
 
+// Kolom pekerjaan, rating, dan status_kontrak OPSIONAL. Header lama
+// "catatan" tetap diterima (lihat mapRow) supaya file lama tidak rusak.
 const TEMPLATE_CSV =
-  "nama,no_hp,jenis_kendaraan,merk_tipe,tahun,domisili,catatan\n" +
-  "Contoh Nama,081234567890,Mobil,Honda CRV,2011,Pekanbaru,Contoh catatan\n";
+  "nama,no_hp,jenis_kendaraan,merk_tipe,tahun,domisili,pekerjaan,rating,status_kontrak\n" +
+  "Contoh Nama,081234567890,Mobil,Honda CRV,2011,Pekanbaru,wiraswasta,Good,RRD\n";
 
 function downloadTemplate() {
   const blob = new Blob([TEMPLATE_CSV], { type: "text/csv;charset=utf-8;" });
@@ -87,6 +90,10 @@ function mapRow(rec: Record<string, unknown>): RawImportRow {
       : getField(rec, "merk_tipe"),
     tahun: getField(rec, "tahun"),
     domisili: getField(rec, "domisili"),
+    pekerjaan: getField(rec, "pekerjaan"),
+    rating: getField(rec, "rating"),
+    statusKontrak: getField(rec, "status_kontrak"),
+    // Header lama - dipisah (rating lama vs pekerjaan) di validateImportRows.
     catatan: getField(rec, "catatan"),
   };
 }
@@ -113,6 +120,29 @@ async function parseFile(file: File): Promise<RawImportRow[]> {
   const sheet = wb.Sheets[wb.SheetNames[0]!];
   const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet!, { defval: "" });
   return rows.map(mapRow);
+}
+
+function RingkasanKolomBaruBadges({ data }: { data: RingkasanKolomBaru }) {
+  const tidakDikenali: string[] = [];
+  if (data.ratingTidakDikenali > 0) tidakDikenali.push(`rating: ${data.ratingTidakDikenali}`);
+  if (data.statusKontrakTidakDikenali > 0) {
+    tidakDikenali.push(`status kontrak: ${data.statusKontrakTidakDikenali}`);
+  }
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap gap-2">
+        <Badge variant="outline">{data.punyaPekerjaan} punya pekerjaan</Badge>
+        <Badge variant="outline">{data.punyaRating} punya rating</Badge>
+        <Badge variant="outline">{data.punyaStatusKontrak} punya status kontrak</Badge>
+      </div>
+      {tidakDikenali.length > 0 && (
+        <p className="flex items-center gap-1 text-xs text-warning-foreground">
+          <AlertTriangle className="h-3 w-3" />
+          Nilai tidak dikenali (disimpan kosong) - {tidakDikenali.join(", ")}.
+        </p>
+      )}
+    </div>
+  );
 }
 
 const STATUS_META: Record<
@@ -295,6 +325,8 @@ export function ImportWizard({ agents }: { agents: AgentCapacityInfo[] }) {
               </Badge>
             </div>
 
+            {validated.kolomBaru && <RingkasanKolomBaruBadges data={validated.kolomBaru} />}
+
             <div className="rounded-lg border overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -304,6 +336,7 @@ export function ImportWizard({ agents }: { agents: AgentCapacityInfo[] }) {
                     <TableHead>No. HP</TableHead>
                     <TableHead>Kendaraan</TableHead>
                     <TableHead>Domisili</TableHead>
+                    <TableHead>Pekerjaan · Rating · Kontrak</TableHead>
                     <TableHead>Keterangan</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -326,6 +359,15 @@ export function ImportWizard({ agents }: { agents: AgentCapacityInfo[] }) {
                           {r.tahun ? ` (${r.tahun})` : ""}
                         </TableCell>
                         <TableCell>{r.domisili || "—"}</TableCell>
+                        <TableCell className="text-xs">
+                          {[
+                            r.pekerjaan ? labelPekerjaan(r.pekerjaan) : null,
+                            r.rating ? labelRating(r.rating) : null,
+                            r.statusKontrak,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "—"}
+                        </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {r.reason ?? ""}
                         </TableCell>
@@ -446,6 +488,8 @@ export function ImportWizard({ agents }: { agents: AgentCapacityInfo[] }) {
                 <div className="text-xs text-muted-foreground">Error</div>
               </div>
             </div>
+
+            {result.kolomBaru && <RingkasanKolomBaruBadges data={result.kolomBaru} />}
 
             {result.importedRows && result.importedRows.length > 0 && (
               <div className="rounded-lg border overflow-x-auto">

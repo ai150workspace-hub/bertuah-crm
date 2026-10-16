@@ -30,6 +30,7 @@ import type { Contact } from "@/types";
 import { STATUS_CALL_COLORS } from "@/lib/status-colors";
 import { claimLeads } from "@/app/actions/leads";
 import { BATAS_PERCOBAAN } from "@/lib/percobaan";
+import { labelKontrakRating } from "@/lib/profil-kontak";
 import { CustomerDrawer } from "./customer-drawer";
 import type { ScriptContentRow } from "@/lib/scripts";
 import type { ProviderCapabilities } from "@/lib/telephony/types";
@@ -422,6 +423,11 @@ export function QueueTable({
               <TableHead className="hidden md:table-cell">Area</TableHead>
               <TableHead>Status Call</TableHead>
               {!compact && (
+                <TableHead title="Status kontrak (RRD/ICP/EXP/LIV) dan rating nasabah">
+                  Kontrak · Rating
+                </TableHead>
+              )}
+              {!compact && (
                 <TableHead title="Jumlah panggilan ke nomor ini (maksimal 3 percobaan)">
                   Percobaan
                 </TableHead>
@@ -487,6 +493,26 @@ export function QueueTable({
                   {!compact && (
                     <TableCell>
                       {(() => {
+                        const kr = labelKontrakRating(c.statusKontrak, c.rating);
+                        return kr ? (
+                          <span
+                            className={cn(
+                              "text-sm",
+                              // RRD (BPKB siap dilepas) paling menonjol, sama seperti di drawer.
+                              c.statusKontrak === "RRD" ? "font-semibold text-success" : "text-muted-foreground"
+                            )}
+                          >
+                            {kr}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        );
+                      })()}
+                    </TableCell>
+                  )}
+                  {!compact && (
+                    <TableCell>
+                      {(() => {
                         const p = percobaanInfo(c.jumlahPercobaan);
                         return <span className={cn("text-sm tabular-nums", p.className)}>{p.label}</span>;
                       })()}
@@ -538,7 +564,7 @@ export function QueueTable({
             })}
             {pageItems.length === 0 && (
               <TableRow>
-                <TableCell colSpan={compact ? 7 : 8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={compact ? 7 : 9} className="text-center text-muted-foreground py-8">
                   Tidak ada lead yang cocok.
                 </TableCell>
               </TableRow>

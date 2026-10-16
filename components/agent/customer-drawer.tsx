@@ -43,6 +43,28 @@ import type { ScriptContentRow } from "@/lib/scripts";
 import { fillWaPlaceholders, type ScriptPlaceholderData } from "@/lib/script-placeholder";
 import { todayWib, addDaysWib, formatDateTimeShortID } from "@/lib/wib-date";
 import { BATAS_PERCOBAAN } from "@/lib/percobaan";
+import {
+  INFO_STATUS_KONTRAK,
+  labelRating,
+  labelPekerjaan,
+  type StatusKontrak,
+} from "@/lib/profil-kontak";
+
+// Warna badge/callout status kontrak - semua token yang sudah dipakai di
+// proyek ini. RRD sengaja paling kuat (border tebal + tebal): BPKB siap
+// dilepas = peluang paling dekat ke closing.
+const KONTRAK_BADGE: Record<StatusKontrak, string> = {
+  RRD: "border-success bg-success/20 text-success font-bold",
+  ICP: "border-warning/30 bg-warning/15 text-warning-foreground font-medium",
+  EXP: "bg-muted text-muted-foreground",
+  LIV: "border-primary/30 bg-primary/10 text-primary font-medium",
+};
+const KONTRAK_CALLOUT: Record<StatusKontrak, string> = {
+  RRD: "rounded-md border-2 border-success bg-success/10 px-3 py-2 text-sm font-semibold text-success",
+  ICP: "rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning-foreground",
+  EXP: "rounded-md border bg-muted/50 px-3 py-2 text-sm text-muted-foreground",
+  LIV: "rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm",
+};
 import { cn } from "@/lib/utils";
 
 const RUPIAH_PLAIN = new Intl.NumberFormat("id-ID");
@@ -89,6 +111,13 @@ export function CustomerDrawer({
   }, [open, contactId, hasPreviousCalls]);
 
   if (!contact) return null;
+
+  // Nilai di luar daftar (mis. baris lama yang diubah manual) tidak ditampilkan
+  // sebagai status kontrak - hanya RRD/ICP/EXP/LIV yang punya arti.
+  const statusKontrak: StatusKontrak | null =
+    contact.statusKontrak && contact.statusKontrak in INFO_STATUS_KONTRAK
+      ? (contact.statusKontrak as StatusKontrak)
+      : null;
 
   const selected = kode ? infoHasil(kode) : null;
   const wajib = (selected?.wajib ?? []) as readonly string[];
@@ -235,6 +264,22 @@ export function CustomerDrawer({
         <div className="flex min-w-0 flex-1 flex-col sm:overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{contact.nama}</SheetTitle>
+          {(statusKontrak || contact.rating) && (
+            <div className="flex flex-wrap gap-1.5">
+              {statusKontrak && (
+                <Badge
+                  variant="outline"
+                  className={KONTRAK_BADGE[statusKontrak]}
+                  title={INFO_STATUS_KONTRAK[statusKontrak].kepanjangan}
+                >
+                  {statusKontrak}
+                </Badge>
+              )}
+              {contact.rating && (
+                <Badge variant="outline">Rating: {labelRating(contact.rating)}</Badge>
+              )}
+            </div>
+          )}
           <SheetDescription className="flex items-center gap-2">
             <span className="flex items-center gap-1.5">
               <Phone className="h-3.5 w-3.5" /> {contact.noHp}
@@ -263,6 +308,24 @@ export function CustomerDrawer({
               <Badge variant="outline">Pajak: {contact.statusPajak}</Badge>
             </div>
             <p className="text-sm text-muted-foreground">{contact.domisili}</p>
+            {contact.pekerjaan && (
+              <p className="text-sm text-muted-foreground">
+                Pekerjaan:{" "}
+                <span className="text-foreground">{labelPekerjaan(contact.pekerjaan)}</span>
+              </p>
+            )}
+            {statusKontrak && (
+              <div className={KONTRAK_CALLOUT[statusKontrak]}>
+                <div>
+                  {statusKontrak} — {INFO_STATUS_KONTRAK[statusKontrak].keterangan}
+                </div>
+                {INFO_STATUS_KONTRAK[statusKontrak].tanyakan && (
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {INFO_STATUS_KONTRAK[statusKontrak].tanyakan}
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           {contact.hasPreviousCalls && (

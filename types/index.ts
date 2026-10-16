@@ -43,6 +43,12 @@ export interface Contact {
   hasPreviousCalls?: boolean;
   /** Pernah dihubungi agen LAIN (recycled) - dipakai untuk badge Recycled di antrean. */
   hasOtherAgentCalls?: boolean;
+  /** Dari file upload (migrasi 0030) - hanya dibaca, agen tidak bisa mengubahnya. Huruf kecil. */
+  pekerjaan?: string;
+  /** Rating kanonik (Excellent, Good, CR-1, ...) atau rating lama huruf kecil (tinggi/sedang/rendah). */
+  rating?: string;
+  /** RRD / ICP / EXP / LIV - dari contacts.status_kredit_kendaraan. */
+  statusKontrak?: string;
   /** Jumlah call log kontak ini, milik agen mana pun - penanda "Percobaan" (batas BATAS_PERCOBAAN di lib/percobaan.ts). */
   jumlahPercobaan?: number;
 }

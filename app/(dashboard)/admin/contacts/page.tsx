@@ -6,6 +6,30 @@ import { ContactsPagination } from "@/components/admin/contacts/contacts-paginat
 import { DncSheetTrigger, type DncRow } from "@/components/admin/contacts/dnc-sheet";
 import { createClient } from "@/lib/supabase/server";
 import { getAgentCapacitiesBulk } from "@/lib/contacts";
+import {
+  RATING_KANONIK,
+  RATING_LAMA,
+  STATUS_KONTRAK,
+  INFO_STATUS_KONTRAK,
+  labelRating,
+} from "@/lib/profil-kontak";
+
+// Pilihan filter rating: daftar kanonik template baru + rating lama (batch
+// 13 September) yang masih ada di data - supaya bisa difilter juga.
+const RATING_OPTIONS = [
+  ...RATING_KANONIK.map((r) => ({ value: r, label: r })),
+  ...RATING_LAMA.map((r) => ({ value: r, label: `${labelRating(r)} (lama)` })),
+];
+const KONTRAK_OPTIONS = STATUS_KONTRAK.map((s) => ({
+  value: s,
+  label: `${s} — ${INFO_STATUS_KONTRAK[s].keterangan}`,
+}));
+
+/** "a,b" dari URL -> hanya nilai yang ada di daftar yang diizinkan. */
+function bacaDaftar(param: string | string[] | undefined, diizinkan: readonly string[]): string[] {
+  if (typeof param !== "string" || !param) return [];
+  return param.split(",").filter((v) => diizinkan.includes(v));
+}
 
 const PAGE_SIZE = 50;
 const DEFAULT_STATUSES = ["Uncalled", "Inbound", "Hot Lead", "Warm", "In Progress"];
@@ -39,17 +63,27 @@ export default async function AdminContactsPage({
   const assigned = typeof assignedParam === "string" ? assignedParam : "all";
   const q = typeof qParam === "string" ? qParam : "";
   const page = typeof pageParam === "string" && Number(pageParam) > 0 ? Number(pageParam) : 1;
+  // Kosong = tidak memfilter. Nilai di luar daftar dibuang (jangan percaya URL).
+  const ratings = bacaDaftar(params.rating, RATING_OPTIONS.map((o) => o.value));
+  const kontraks = bacaDaftar(params.kontrak, STATUS_KONTRAK);
 
   const supabase = await createClient();
 
   let query = supabase
     .from("contacts")
-    .select("id, nama, no_hp, jenis_kendaraan, status_call, assigned_to, updated_at", {
-      count: "exact",
-    });
+    .select(
+      "id, nama, no_hp, jenis_kendaraan, status_call, assigned_to, updated_at, rating, pekerjaan, status_kredit_kendaraan",
+      { count: "exact" }
+    );
 
   if (statuses.length > 0 && statuses.length < ALL_STATUSES.length) {
     query = query.in("status_call", statuses);
+  }
+  if (ratings.length > 0) {
+    query = query.in("rating", ratings);
+  }
+  if (kontraks.length > 0) {
+    query = query.in("status_kredit_kendaraan", kontraks);
   }
   if (assigned === "unassigned") {
     query = query.is("assigned_to", null);
@@ -110,6 +144,9 @@ export default async function AdminContactsPage({
     nama: c.nama,
     noHp: c.no_hp,
     jenisKendaraan: c.jenis_kendaraan,
+    pekerjaan: c.pekerjaan,
+    rating: c.rating,
+    statusKontrak: c.status_kredit_kendaraan,
     statusCall: c.status_call,
     assignedTo: c.assigned_to,
     assignedToName: c.assigned_to ? (agentNameMap.get(c.assigned_to) ?? "—") : null,
@@ -146,6 +183,10 @@ export default async function AdminContactsPage({
         assigned={assigned}
         q={q}
         agents={agents.map((a) => ({ id: a.id, name: a.name }))}
+        ratings={ratings}
+        ratingOptions={RATING_OPTIONS}
+        kontraks={kontraks}
+        kontrakOptions={KONTRAK_OPTIONS}
       />
 
       <ContactsTable rows={rows} agentCapacities={agentCapacities} />
