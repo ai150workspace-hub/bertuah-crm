@@ -35,6 +35,7 @@ import {
 import { toast } from "sonner";
 import type { StatusCall } from "@/types";
 import { STATUS_CALL_COLORS } from "@/lib/status-colors";
+import { labelRating, labelPekerjaan } from "@/lib/profil-kontak";
 import { assignContacts, releaseContactsToPool } from "@/app/actions/contacts";
 
 export interface AdminContactRow {
@@ -42,6 +43,11 @@ export interface AdminContactRow {
   nama: string;
   noHp: string;
   jenisKendaraan: string;
+  /** Dari file upload (migrasi 0030) - hanya dibaca. */
+  pekerjaan: string | null;
+  rating: string | null;
+  /** contacts.status_kredit_kendaraan: RRD / ICP / EXP / LIV. */
+  statusKontrak: string | null;
   statusCall: string;
   assignedTo: string | null;
   assignedToName: string | null;
@@ -173,6 +179,9 @@ export function ContactsTable({
               <TableHead>Nama</TableHead>
               <TableHead>No HP</TableHead>
               <TableHead>Kendaraan</TableHead>
+              <TableHead>Pekerjaan</TableHead>
+              <TableHead>Rating</TableHead>
+              <TableHead>Kontrak</TableHead>
               <TableHead>Status Call</TableHead>
               <TableHead>Assigned To</TableHead>
               <TableHead>Last Updated</TableHead>
@@ -194,6 +203,27 @@ export function ContactsTable({
                 <TableCell className="font-medium">{r.nama}</TableCell>
                 <TableCell>{r.noHp}</TableCell>
                 <TableCell>{r.jenisKendaraan}</TableCell>
+                <TableCell className="text-sm">
+                  {r.pekerjaan ? (
+                    labelPekerjaan(r.pekerjaan)
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-sm">
+                  {r.rating ? (
+                    labelRating(r.rating)
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {r.statusKontrak ? (
+                    <Badge variant="outline">{r.statusKontrak}</Badge>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">—</span>
+                  )}
+                </TableCell>
                 <TableCell>
                   <Badge
                     className={STATUS_CALL_COLORS[r.statusCall as StatusCall]}
@@ -251,7 +281,7 @@ export function ContactsTable({
             ))}
             {rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                   Tidak ada kontak yang cocok filter.
                 </TableCell>
               </TableRow>

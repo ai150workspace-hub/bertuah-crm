@@ -235,6 +235,10 @@ export interface ContactRow {
   assigned_to: string | null;
   last_contacted_at: string | null;
   next_follow_up_at: string | null;
+  /** Migrasi 0030 - jalankan SEBELUM deploy kode ini, atau select CONTACT_SELECT gagal. */
+  rating: string | null;
+  pekerjaan: string | null;
+  status_kredit_kendaraan: string | null;
 }
 
 export function mapDbContact(row: ContactRow): Contact {
@@ -252,11 +256,14 @@ export function mapDbContact(row: ContactRow): Contact {
     assignedTo: row.assigned_to ?? undefined,
     lastContactedAt: row.last_contacted_at ?? undefined,
     nextFollowUpAt: row.next_follow_up_at ?? undefined,
+    pekerjaan: row.pekerjaan ?? undefined,
+    rating: row.rating ?? undefined,
+    statusKontrak: row.status_kredit_kendaraan ?? undefined,
   };
 }
 
 export const CONTACT_SELECT =
-  "id, nama, no_hp, jenis_kendaraan, merk_tipe, tahun, domisili, status_pajak, status_call, status_prospek, assigned_to, last_contacted_at, next_follow_up_at";
+  "id, nama, no_hp, jenis_kendaraan, merk_tipe, tahun, domisili, status_pajak, status_call, status_prospek, assigned_to, last_contacted_at, next_follow_up_at, rating, pekerjaan, status_kredit_kendaraan";
 
 /**
  * Slot aktif = Uncalled + (In Progress/Warm yang butuh dikerjakan HARI

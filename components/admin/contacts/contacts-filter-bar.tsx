@@ -26,18 +26,33 @@ interface AgentOption {
   name: string;
 }
 
+export interface FilterOption {
+  value: string;
+  label: string;
+}
+
 export function ContactsFilterBar({
   statuses,
   allStatuses,
   assigned,
   q,
   agents,
+  ratings,
+  ratingOptions,
+  kontraks,
+  kontrakOptions,
 }: {
   statuses: string[];
   allStatuses: string[];
   assigned: string;
   q: string;
   agents: AgentOption[];
+  /** Rating yang sedang dipilih (kosong = semua). */
+  ratings: string[];
+  ratingOptions: FilterOption[];
+  /** Status kontrak yang sedang dipilih (kosong = semua). */
+  kontraks: string[];
+  kontrakOptions: FilterOption[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -58,6 +73,12 @@ export function ContactsFilterBar({
       ? [...statuses, status]
       : statuses.filter((s) => s !== status);
     apply({ status: next.join(",") });
+  }
+
+  // Rating & status kontrak: tidak ada pilihan = semua (tidak memfilter).
+  function toggleDari(key: "rating" | "kontrak", terpilih: string[], nilai: string, checked: boolean) {
+    const next = checked ? [...terpilih, nilai] : terpilih.filter((v) => v !== nilai);
+    apply({ [key]: next.join(",") });
   }
 
   const assignedLabel =
@@ -90,6 +111,60 @@ export function ContactsFilterBar({
                 onSelect={(e) => e.preventDefault()}
               >
                 {s}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button variant="outline" size="sm">
+              <Filter className="h-3.5 w-3.5" />
+              Rating{ratings.length > 0 ? ` (${ratings.length})` : ""}
+            </Button>
+          }
+        />
+        <DropdownMenuContent align="start" className="w-56">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Filter Rating</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {ratingOptions.map((o) => (
+              <DropdownMenuCheckboxItem
+                key={o.value}
+                checked={ratings.includes(o.value)}
+                onCheckedChange={(checked) => toggleDari("rating", ratings, o.value, checked === true)}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {o.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button variant="outline" size="sm">
+              <Filter className="h-3.5 w-3.5" />
+              Status Kontrak{kontraks.length > 0 ? ` (${kontraks.length})` : ""}
+            </Button>
+          }
+        />
+        <DropdownMenuContent align="start" className="w-64">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Filter Status Kontrak</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {kontrakOptions.map((o) => (
+              <DropdownMenuCheckboxItem
+                key={o.value}
+                checked={kontraks.includes(o.value)}
+                onCheckedChange={(checked) => toggleDari("kontrak", kontraks, o.value, checked === true)}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {o.label}
               </DropdownMenuCheckboxItem>
             ))}
           </DropdownMenuGroup>

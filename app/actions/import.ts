@@ -5,6 +5,15 @@ import { createClient } from "@/lib/supabase/server";
 import { normalizePhoneLocal } from "@/lib/import/phone-local";
 import { distributeAutoRoundRobin, type AgentCapacity } from "@/lib/import/distribute";
 import { getAgentCapacitiesBulk } from "@/lib/contacts";
+import {
+  normalisasiRating,
+  normalisasiStatusKontrak,
+  normalisasiPekerjaan,
+  pisahCatatanLama,
+  ratingUntukSimpan,
+  ringkasKolomBaru,
+  type RingkasanKolomBaru,
+} from "@/lib/profil-kontak";
 
 export interface RawImportRow {
   nama: string;
@@ -13,6 +22,15 @@ export interface RawImportRow {
   merkTipe: string;
   tahun: string;
   domisili: string;
+  /** Kolom template baru. Boleh kosong / tidak ada di file. */
+  pekerjaan: string;
+  rating: string;
+  statusKontrak: string;
+  /**
+   * Header LAMA "catatan" (template sebelum 0030). Isinya dulu campuran
+   * rating lama atau pekerjaan - dipisah di validateImportRows, tidak
+   * pernah lagi masuk ke contacts.notes.
+   */
   catatan: string;
 }
 
@@ -27,7 +45,15 @@ export interface ValidatedRow {
   merkTipe: string;
   tahun: number | null;
   domisili: string;
-  catatan: string;
+  /** Huruf kecil, spasi dirapatkan; "" kalau kosong. Disimpan ke contacts.pekerjaan. */
+  pekerjaan: string;
+  /** Bentuk kanonik (Excellent, Good, CR-1, ...) atau rating lama huruf kecil; null kalau kosong / tidak dikenali. */
+  rating: string | null;
+  /** RRD / ICP / EXP / LIV; null kalau kosong / tidak dikenali. Disimpan ke contacts.status_kredit_kendaraan. */
+  statusKontrak: string | null;
+  /** Sel rating terisi tapi di luar daftar (disimpan kosong). */
+  ratingTidakDikenali: boolean;
+  statusKontrakTidakDikenali: boolean;
   status: RowStatus;
   reason?: string;
 }
@@ -41,6 +67,8 @@ export interface ValidateImportResult {
   error?: string;
   rows: ValidatedRow[];
   summary: { valid: number; duplicate: number; invalid: number };
+  /** Kolom pekerjaan / rating / status kontrak dari baris yang akan diimpor (bukan format salah). */
+  kolomBaru?: RingkasanKolomBaru;
 }
 
 // PostgREST memotong hasil SATU query ke 1.000 baris secara diam-diam
@@ -78,6 +106,25 @@ export async function validateImportRows(rows: RawImportRow[]): Promise<Validate
       }
     }
 
+    // Pekerjaan: kolom "pekerjaan" didahulukan; kalau kosong dan file
+    // memakai header lama "catatan", dipisah dengan aturan yang sama dengan
+    // backfill 0030 (rating lama vs pekerjaan). notes TIDAK diisi dari sini.
+    let pekerjaan = normalisasiPekerjaan(r.pekerjaan);
+    let ratingLama: string | null = null;
+    if (!pekerjaan && (r.catatan ?? "").trim()) {
+      const pisah = pisahCatatanLama(r.catatan);
+      pekerjaan = pisah.pekerjaan;
+      ratingLama = pisah.ratingLama;
+    }
+
+    const ratingMentah = (r.rating ?? "").trim();
+    const rating: string | null = ratingMentah ? normalisasiRating(ratingMentah) : ratingLama;
+    const ratingTidakDikenali = Boolean(ratingMentah) && rating === null;
+
+    const kontrakMentah = (r.statusKontrak ?? "").trim();
+    const statusKontrak = kontrakMentah ? normalisasiStatusKontrak(kontrakMentah) : null;
+    const statusKontrakTidakDikenali = Boolean(kontrakMentah) && statusKontrak === null;
+
     let status: RowStatus = "valid";
     let reason: string | undefined;
 
@@ -109,7 +156,11 @@ export async function validateImportRows(rows: RawImportRow[]): Promise<Validate
       merkTipe,
       tahun,
       domisili: (r.domisili ?? "").trim(),
-      catatan: (r.catatan ?? "").trim(),
+      pekerjaan,
+      rating,
+      statusKontrak,
+      ratingTidakDikenali,
+      statusKontrakTidakDikenali,
       status,
       reason,
     };
@@ -164,7 +215,12 @@ export async function validateImportRows(rows: RawImportRow[]): Promise<Validate
     invalid: finalRows.filter((r) => r.status === "invalid").length,
   };
 
-  return { success: true, rows: finalRows, summary };
+  return {
+    success: true,
+    rows: finalRows,
+    summary,
+    kolomBaru: ringkasKolomBaru(finalRows.filter((r) => r.status !== "invalid")),
+  };
 }
 
 export interface AgentCapacityInfo {
@@ -223,6 +279,8 @@ export interface CommitImportResult {
   errorCount?: number;
   batchId?: string;
   importedRows?: ValidatedRow[];
+  /** Pekerjaan / rating / status kontrak dari baris yang diimpor, termasuk nilai tidak dikenali per kolom. */
+  kolomBaru?: RingkasanKolomBaru;
 }
 
 export async function commitImport(input: CommitImportInput): Promise<CommitImportResult> {
@@ -305,7 +363,13 @@ export async function commitImport(input: CommitImportInput): Promise<CommitImpo
       merk_tipe: r.merkTipe || null,
       tahun: r.tahun,
       domisili: r.domisili || null,
-      notes: r.catatan || null,
+      // Nilai dinormalisasi ULANG di server - baris datang dari klien,
+      // jangan dipercaya apa adanya. notes sengaja kosong saat impor:
+      // kolom itu dipakai sistem untuk jejak otomatis, bukan data nasabah.
+      pekerjaan: normalisasiPekerjaan(r.pekerjaan) || null,
+      rating: ratingUntukSimpan(r.rating),
+      status_kredit_kendaraan: normalisasiStatusKontrak(r.statusKontrak),
+      notes: null,
       status_call: "Uncalled",
       assigned_to: assignedTo,
       assigned_at: assignedTo ? now : null,
@@ -337,5 +401,6 @@ export async function commitImport(input: CommitImportInput): Promise<CommitImpo
     errorCount,
     batchId: batch.id,
     importedRows: importable,
+    kolomBaru: ringkasKolomBaru(importable),
   };
 }
